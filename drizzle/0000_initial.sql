@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('admin','user')), password_hash TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, username TEXT NOT NULL REFERENCES users(username), expires_at TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS arrears (id TEXT PRIMARY KEY, no_polisi TEXT NOT NULL, nama_pemilik TEXT, nomor_hp TEXT, alamat TEXT, jatuh_tempo TEXT, jenis_kendaraan TEXT, samsat_asal TEXT, prioritas TEXT, assigned_to TEXT REFERENCES users(username), assigned_by TEXT REFERENCES users(username), assigned_at TEXT, imported_by TEXT NOT NULL REFERENCES users(username), imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, status TEXT NOT NULL DEFAULT 'Ditugaskan');
+CREATE INDEX IF NOT EXISTS arrears_assigned_to_idx ON arrears(assigned_to);
+CREATE INDEX IF NOT EXISTS arrears_plate_idx ON arrears(no_polisi);
+CREATE TABLE IF NOT EXISTS sightings (id TEXT PRIMARY KEY, notice_id TEXT UNIQUE, no_polisi TEXT NOT NULL, petugas TEXT NOT NULL REFERENCES users(username), lokasi TEXT NOT NULL, captured_at TEXT NOT NULL, status TEXT NOT NULL, print_status TEXT, evidence_key TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS sightings_petugas_idx ON sightings(petugas);
