@@ -1,7 +1,12 @@
 import {cp, mkdir, rm} from 'node:fs/promises';
 await rm('dist/database-gaspoll.xlsx',{force:true});
+await mkdir('dist/client',{recursive:true});
+await cp('dist/index.html','dist/client/index.html');
+await cp('dist/assets','dist/client/assets',{recursive:true});
 await mkdir('dist/server',{recursive:true});
 await mkdir('dist/.openai/drizzle',{recursive:true});
 await cp('worker/index.js','dist/server/index.js');
 await cp('.openai/hosting.json','dist/.openai/hosting.json');
 await cp('drizzle/0000_initial.sql','dist/.openai/drizzle/0000_initial.sql');
+await rm('dist/index.html',{force:true});
+await rm('dist/assets',{recursive:true,force:true});
