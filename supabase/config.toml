@@ -1,0 +1,11 @@
+project_id = "aksi-tempel-digital-riau"
+
+[api]
+enabled = true
+
+[db]
+major_version = 17
+
+[storage]
+enabled = true
+file_size_limit = "5MiB"

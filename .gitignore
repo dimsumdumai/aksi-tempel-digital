@@ -5,5 +5,7 @@ dist/
 .env.*
 !.env.example
 .wrangler/
+.vercel/
+.supabase/
 *.log
 public/database-gaspoll.xlsx
