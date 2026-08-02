@@ -7,5 +7,6 @@ dist/
 .wrangler/
 .vercel/
 .supabase/
+supabase/.temp/
 *.log
 public/database-gaspoll.xlsx
