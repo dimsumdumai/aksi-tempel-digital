@@ -46,13 +46,37 @@ SUPABASE_SERVICE_ROLE_KEY=replace-in-vercel-only
 
 ```
 src/main.jsx           Komponen React utama dan seluruh UI
+src/views.jsx          Semua view components (Capture, Daily, Dashboard, dll)
 src/auth.js            Autentikasi dan session management
 src/printerService.js  Generator CPCL/ZPL untuk printer Zebra
 src/styles.css         Seluruh styling
-api/[...path].js       API handler (auth, arrears, sightings)
+api/[...path].js       API handler (auth, arrears, sightings, profile)
 api/_lib.js            Shared utilities (Supabase client, sanitasi)
+vercel.json            Konfigurasi deploy Vercel
 supabase/migrations/   Skema database PostgreSQL
-scripts/               Build dan deployment scripts
+```
+
+## Deploy ke Vercel
+
+1. Push repository ke GitHub
+2. Buka [vercel.com/new](https://vercel.com/new), import repository `dimsumdumai/aksi-tempel-digital`
+3. Vercel otomatis mendeteksi Vite dan `vercel.json`
+4. Tambahkan Environment Variables:
+   - `SUPABASE_URL` — URL project Supabase
+   - `SUPABASE_SERVICE_ROLE_KEY` — service role key (hanya di Vercel, jangan di-commit)
+5. Klik Deploy
+
+Build akan menjalankan `vite build` → output ke `dist/` → Vercel serve sebagai SPA + serverless functions di `/api/*`.
+
+**Database setup**: Jalankan migration SQL di Supabase SQL Editor:
+```bash
+# 1. Buat tabel utama + user seeding
+cat supabase/migrations/20260805000000_users_and_roles.sql | pbcopy
+# Paste di Supabase SQL Editor → Run
+
+# 2. Tambah kolom email
+cat supabase/migrations/20260806000000_email_and_profile.sql | pbcopy
+# Paste di Supabase SQL Editor → Run
 ```
 
 ## Pembaruan OCR v2
