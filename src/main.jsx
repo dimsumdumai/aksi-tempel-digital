@@ -1,157 +1,82 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import * as XLSX from 'xlsx';
-import Tesseract from 'tesseract.js';
-import QRCode from 'qrcode';
 import './styles.css';
-import {buildNoticeId, connectZebraBridge, disconnectZebraBridge, downloadPrinterPayload, getZebraBridgeStatus, getZebraCapability, sendToZebraBridge, testZebraBridge, TAX_INFO_URL} from './printerService';
-import {ACCOUNTS, apiFetch, authenticate, clearSession, loadSession, saveSession} from './auth';
+import {isSuperAdmin,isAdmin,isUser,apiFetch,authenticate,clearSession,loadSession,saveSession} from './auth';
+import {LoginScreen,CaptureView,DailyView,DashboardView,VehicleHistoryView,NoticeView,ArrearsView,ThermalNotice,ThermalQr,UserManagementView} from './views';
+import {buildNoticeId,downloadPrinterPayload} from './printerService';
 
-
-const makeIcon=(symbol)=>(props)=><span className={props?.className||'icon'} aria-hidden="true">{symbol}</span>;
-const Camera=makeIcon('📷'), Upload=makeIcon('⬆'), Search=makeIcon('⌕'), MapPin=makeIcon('📍'), User=makeIcon('👤'), MessageCircle=makeIcon('💬'), CalendarDays=makeIcon('📅'), CheckCircle2=makeIcon('✓'), AlertTriangle=makeIcon('⚠'), Database=makeIcon('▦'), FileDown=makeIcon('⇩'), Trash2=makeIcon('🗑'), RefreshCw=makeIcon('↻'), X=makeIcon('×'), ClipboardList=makeIcon('☷'), BarChart3=makeIcon('▥'), Printer=makeIcon('🖨'), History=makeIcon('◷');
-
+const makeIcon=s=>(p)=><span className={p?.className||'icon'} aria-hidden="true">{s}</span>;
+const Camera=makeIcon('\u{1F4F7}'),ClipboardList=makeIcon('\u{258F}'),BarChart3=makeIcon('\u{25A5}'),Printer=makeIcon('\u{1F5A8}'),History=makeIcon('\u{25F7}'),Database=makeIcon('\u{25A6}'),UserPlus=makeIcon('\u{2695}'),Settings=makeIcon('\u{2699}');
 const today=()=>new Date().toISOString().slice(0,10);
-const normalizePlate=(s='')=>s.toUpperCase().replace(/[^A-Z0-9]/g,'').replace(/^BM(\d{1,4})([A-Z]{1,3})$/,'BM-$1-$2');
-const displayPlate=(s='')=>{const n=s.toUpperCase().replace(/[^A-Z0-9]/g,'');const m=n.match(/BM(\d{1,4})([A-Z]{1,3})/);return m?`BM-${m[1]}-${m[2]}`:s.toUpperCase()};
-const OCR_CHAR_FIX={O:'0',Q:'0',D:'0',I:'1',L:'1',Z:'2',S:'5',G:'6',B:'8'};
-const normalizeOcrLine=(line='')=>line.toUpperCase().replace(/[|]/g,'I').replace(/[^A-Z0-9]/g,'');
-const findPlates=(text='')=>{
- const lines=text.toUpperCase().split(/\n|\r/).map(normalizeOcrLine).filter(Boolean);
- const joined=normalizeOcrLine(text);
- const sources=[...lines,joined];
- const out=[];
- for(const raw of sources){
-  const start=raw.indexOf('BM');
-  const variants=start>=0?[raw.slice(start),raw]:[raw];
-  for(const value of variants){
-   const m=value.match(/^B[MNHW]?([A-Z0-9]{1,4})([A-Z]{1,3})/);
-   if(!m) continue;
-   const digits=m[1].split('').map(c=>/\d/.test(c)?c:(OCR_CHAR_FIX[c]??c)).join('');
-   const suffix=m[2].replace(/[012568]/g,c=>({'0':'O','1':'I','2':'Z','5':'S','6':'G','8':'B'}[c]));
-   if(/^\d{1,4}$/.test(digits)&&/^[A-Z]{1,3}$/.test(suffix)) out.push(`BM-${digits}-${suffix}`);
-  }
- }
- return [...new Set(out)];
-};
-const findPlate=(text='')=>findPlates(text)[0]||'';
-const plateKey=(s='')=>String(s).replace(/[^A-Z0-9]/g,'').toUpperCase();
-const editDistance=(a,b)=>{const dp=Array.from({length:a.length+1},()=>Array(b.length+1).fill(0));for(let i=0;i<=a.length;i++)dp[i][0]=i;for(let j=0;j<=b.length;j++)dp[0][j]=j;for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return dp[a.length][b.length]};
-const closestPlate=(candidate,db)=>{const key=plateKey(candidate);let best=null;for(const row of db){const p=plateKey(row.no_polisi);if(!p||Math.abs(p.length-key.length)>2)continue;const d=editDistance(key,p);if(!best||d<best.distance)best={plate:displayPlate(row.no_polisi),distance:d,row};if(d===0)break;}return best&&best.distance<=2?best:null;};
-const loadImage=src=>new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=src;});
-const makeProcessedCanvas=(img,crop,threshold=false)=>{const sx=Math.round(img.width*crop.x),sy=Math.round(img.height*crop.y),sw=Math.max(1,Math.round(img.width*crop.w)),sh=Math.max(1,Math.round(img.height*crop.h));const scale=Math.min(3,Math.max(1.5,1600/sw));const canvas=document.createElement('canvas');canvas.width=Math.round(sw*scale);canvas.height=Math.round(sh*scale);const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(img,sx,sy,sw,sh,0,0,canvas.width,canvas.height);const data=ctx.getImageData(0,0,canvas.width,canvas.height);for(let i=0;i<data.data.length;i+=4){const g=.299*data.data[i]+.587*data.data[i+1]+.114*data.data[i+2];let v=Math.max(0,Math.min(255,(g-128)*1.65+128));if(threshold)v=v>145?255:0;data.data[i]=data.data[i+1]=data.data[i+2]=v;}ctx.putImageData(data,0,0);return canvas;};
-const phone62=(v)=>{let s=String(v||'').replace(/\D/g,''); if(!s||s==='0') return ''; if(s.startsWith('0'))s='62'+s.slice(1); else if(!s.startsWith('62'))s='62'+s; return s;};
-const waText=(r)=>`Yth. Bapak/Ibu pemilik kendaraan ${r.no_polisi}. Berdasarkan kegiatan Aksi Tempel-Tempel Jasa Raharja, kendaraan teridentifikasi memiliki kewajiban yang perlu ditindaklanjuti. Mohon melakukan pengecekan dan pembayaran melalui layanan Samsat resmi. Terima kasih.`;
+const phone62=v=>{let s=String(v||'').replace(/\D/g,'');if(!s||s==='0')return'';if(s.startsWith('0'))s='62'+s.slice(1);else if(!s.startsWith('62'))s='62'+s;return s};
+const waText=r=>'Yth. Bapak/Ibu pemilik kendaraan '+r.no_polisi+'. Berdasarkan kegiatan Aksi Tempel-Tempel Jasa Raharja, kendaraan teridentifikasi memiliki kewajiban yang perlu ditindaklanjuti. Mohon melakukan pengecekan dan pembayaran melalui layanan Samsat resmi. Terima kasih.';
 const loadEntries=()=>JSON.parse(localStorage.getItem('aksi-tempel-entries')||'[]');
-const saveEntries=(v)=>localStorage.setItem('aksi-tempel-entries',JSON.stringify(v));
-const imageToEvidence=async(file)=>{const source=URL.createObjectURL(file);try{const img=await loadImage(source);const max=1280;const ratio=Math.min(1,max/Math.max(img.width,img.height));const canvas=document.createElement('canvas');canvas.width=Math.round(img.width*ratio);canvas.height=Math.round(img.height*ratio);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);return canvas.toDataURL('image/jpeg',.76);}finally{URL.revokeObjectURL(source)}};
+const saveEntries=v=>localStorage.setItem('aksi-tempel-entries',JSON.stringify(v));
 
 function App(){
  const [session,setSession]=useState(loadSession);
  const [db,setDb]=useState([]),[loadingDb,setLoadingDb]=useState(true),[entries,setEntries]=useState(loadEntries);
- const [date,setDate]=useState(today()),[location,setLocation]=useState(''),[plate,setPlate]=useState('');
- const [photo,setPhoto]=useState(''),[ocr,setOcr]=useState(false),[progress,setProgress]=useState(0),[query,setQuery]=useState(''),[tab,setTab]=useState('capture');
- const [selectedNotice,setSelectedNotice]=useState(null),[finder,setFinder]=useState(''),[printerLanguage,setPrinterLanguage]=useState('CPCL');
- const inputRef=useRef();
- useEffect(()=>{if(!session){setLoadingDb(false);return}setLoadingDb(true);const load=async()=>{if(import.meta.env.DEV){const r=await fetch('/database-gaspoll.xlsx');if(!r.ok)throw new Error('Database lokal tidak ditemukan');const wb=XLSX.read(await r.arrayBuffer(),{type:'array',cellDates:true});return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''})}const r=await apiFetch('/api/arrears');const data=await r.json();if(!r.ok)throw new Error(data.error);return (data.rows||[]).map(x=>({...x,nama_pemilik_terakhir:x.nama_pemilik,alamat_pemilik_terakhir:x.alamat,tgl_mati_yad:x.jatuh_tempo,deskripsi_jenis_kendaraan:x.jenis_kendaraan,samsat_asal_nama:x.samsat_asal}))};load().then(setDb).catch(console.error).finally(()=>setLoadingDb(false));},[session]);
+ const [date,setDate]=useState(today()),[tab,setTab]=useState('capture');
+ const [selectedNotice,setSelectedNotice]=useState(null),[printerLanguage,setPrinterLanguage]=useState('CPCL');
+
+ useEffect(()=>{if(!session){setLoadingDb(false);return}setLoadingDb(true);const load=async()=>{if(import.meta.env.DEV){const r=await fetch('/database-gaspoll.xlsx');if(!r.ok)throw new Error('Database lokal tidak ditemukan');const wb=XLSX.read(await r.arrayBuffer(),{type:'array',cellDates:true});return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''})}const r=await apiFetch('/api/arrears');const data=await r.json();if(!r.ok)throw new Error(data.error);return(data.rows||[]).map(x=>({...x,nama_pemilik_terakhir:x.nama_pemilik,alamat_pemilik_terakhir:x.alamat,tgl_mati_yad:x.jatuh_tempo,deskripsi_jenis_kendaraan:x.jenis_kendaraan,samsat_asal_nama:x.samsat_asal}))};load().then(setDb).catch(console.error).finally(()=>setLoadingDb(false))},[session]);
  useEffect(()=>saveEntries(entries),[entries]);
- useEffect(()=>{if(!session||import.meta.env.DEV)return;apiFetch('/api/sightings').then(async r=>{const data=await r.json();if(!r.ok)throw new Error(data.error);setEntries(local=>{const map=new Map((data.rows||[]).map(row=>[row.id,row]));local.forEach(row=>map.set(row.id,{...map.get(row.id),...row}));return [...map.values()]})}).catch(console.error)},[session]);
- const match=useMemo(()=>{const p=displayPlate(plate).replace(/[^A-Z0-9]/g,'');return db.find(x=>String(x.no_polisi||'').replace(/[^A-Z0-9]/g,'').toUpperCase()===p)},[db,plate]);
- const visibleEntries=useMemo(()=>session?.role==='admin'?entries:entries.filter(e=>e.created_by===session?.username||(!e.created_by&&(e.petugas===session?.name||session?.aliases?.includes(e.petugas)))),[entries,session]);
+ useEffect(()=>{if(!session||import.meta.env.DEV)return;apiFetch('/api/sightings').then(async r=>{const data=await r.json();if(!r.ok)throw new Error(data.error);setEntries(local=>{const map=new Map((data.rows||[]).map(row=>[row.id,row]));local.forEach(row=>map.set(row.id,{...map.get(row.id),...row}));return[...map.values()]})}).catch(console.error)},[session]);
+
+ const match=useMemo(()=>{return null},[]);
+ const visibleEntries=useMemo(()=>{if(isAdmin(session))return entries;return entries.filter(e=>e.created_by===session?.username||(!e.created_by&&(e.petugas===session?.name)))},[entries,session]);
  const dayEntries=useMemo(()=>visibleEntries.filter(e=>e.date===date),[visibleEntries,date]);
- const filtered=useMemo(()=>dayEntries.filter(e=>JSON.stringify(e).toLowerCase().includes(query.toLowerCase())),[dayEntries,query]);
- const latestSightings=useMemo(()=>Object.values(visibleEntries.reduce((acc,e)=>{const key=plateKey(e.no_polisi);if(!acc[key]||`${e.date} ${e.time}`>`${acc[key].date} ${acc[key].time}`)acc[key]=e;return acc},{})).sort((a,b)=>`${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`)),[visibleEntries]);
- const foundSightings=useMemo(()=>{const key=plateKey(finder);return key?visibleEntries.filter(e=>plateKey(e.no_polisi).includes(key)).sort((a,b)=>`${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`)):[]},[visibleEntries,finder]);
- const validPhones=dayEntries.filter(e=>phone62(e.nomor_hp)).length;
- const captured=dayEntries.length;
- function getLocation(){if(!navigator.geolocation){setLocation('Lokasi tidak didukung browser');return;}navigator.geolocation.getCurrentPosition(p=>setLocation(`${p.coords.latitude.toFixed(6)}, ${p.coords.longitude.toFixed(6)}`),()=>setLocation('Lokasi gagal diambil — isi manual'));}
- async function onFile(file){
-  if(!file)return;
-  const url=URL.createObjectURL(file);
-  setPlate('');setOcr(true);setProgress(1);
-  try{
-   const img=await loadImage(url);
-   setPhoto(await imageToEvidence(file));
-   const crops=[
-    {x:0,y:0,w:1,h:1,name:'gambar penuh'},
-    {x:.08,y:.18,w:.84,h:.64,name:'bagian tengah'},
-    {x:0,y:0,w:.5,h:.36,name:'kiri atas'},
-    {x:.5,y:0,w:.5,h:.36,name:'kanan atas'},
-    {x:0,y:.32,w:.5,h:.36,name:'kiri tengah'},
-    {x:.5,y:.32,w:.5,h:.36,name:'kanan tengah'},
-    {x:0,y:.64,w:.5,h:.36,name:'kiri bawah'},
-    {x:.5,y:.64,w:.5,h:.36,name:'kanan bawah'}
-   ];
-   let selected='',nearest=null;
-   for(let i=0;i<crops.length&&!selected;i++){
-    for(const threshold of [false,true]){
-     const canvas=makeProcessedCanvas(img,crops[i],threshold);
-     const result=await Tesseract.recognize(canvas,'eng',{
-      logger:m=>{if(m.status==='recognizing text'){const local=m.progress||0;setProgress(Math.min(99,Math.round(((i+(threshold ? .5 : 0)+local*.5)/crops.length)*100)));}},
-      tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-      tessedit_pageseg_mode:'7',
-      preserve_interword_spaces:'1'
-     });
-     const candidates=findPlates(result.data.text);
-     for(const candidate of candidates){
-      const exact=db.find(row=>plateKey(row.no_polisi)===plateKey(candidate));
-      if(exact){selected=displayPlate(exact.no_polisi);break;}
-      const close=closestPlate(candidate,db);
-      if(close&&(!nearest||close.distance<nearest.distance))nearest=close;
-     }
-     if(selected)break;
-    }
-   }
-   setProgress(100);
-   if(selected)setPlate(selected);
-   else if(nearest){setPlate(nearest.plate);alert(`OCR mendekati ${nearest.plate} dan telah dicocokkan dengan database. Silakan periksa kembali sebelum menyimpan.`);}
-   else alert('Nomor polisi belum terbaca. Potong foto agar hanya satu plat terlihat, ambil lebih dekat, atau ketik nomor polisi secara manual.');
-  }catch(e){console.error(e);alert('OCR gagal: '+(e?.message||String(e)));}
-  finally{URL.revokeObjectURL(url);setOcr(false);setTimeout(()=>setProgress(0),500);}
+
+ function handleCapture({date:d,location,plate,photo,match:m}){
+  const base=m||{};const now=new Date();
+  const row={id:crypto.randomUUID(),notice_id:buildNoticeId(now),date:d,time:now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}),captured_at:now.toISOString(),created_by:session.username,petugas:session.name,lokasi:location,foto:photo,no_polisi:plate,nama_pemilik_terakhir:base.nama_pemilik_terakhir||'Tidak ditemukan',nomor_hp:base.nomor_hp||'',alamat_pemilik_terakhir:base.alamat_pemilik_terakhir||'',tgl_mati_yad:base.tgl_mati_yad?String(base.tgl_mati_yad).slice(0,10):'',deskripsi_jenis_kendaraan:base.deskripsi_jenis_kendaraan||'',samsat_asal_nama:base.samsat_asal_nama||'',prioritas:base.prioritas||'',flag_nomor_hp_valid:base.flag_nomor_hp_valid||'',status:'Belum Dihubungi',print_status:'Belum Dicetak'};
+  setEntries(v=>[row,...v]);if(!import.meta.env.DEV)apiFetch('/api/sightings',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(row)}).catch(console.error);
+  setSelectedNotice(row);setTab('notice')
  }
- function add(){if(!plate.trim())return alert('Nomor polisi wajib diisi.');if(!location.trim())return alert('Lokasi wajib diisi.');const base=match||{};const now=new Date();const row={id:crypto.randomUUID(),notice_id:buildNoticeId(now),date,time:now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}),captured_at:now.toISOString(),created_by:session.username,petugas:session.name,lokasi:location,foto:photo,no_polisi:displayPlate(plate),nama_pemilik_terakhir:base.nama_pemilik_terakhir||'Tidak ditemukan',nomor_hp:base.nomor_hp||'',alamat_pemilik_terakhir:base.alamat_pemilik_terakhir||'',tgl_mati_yad:base.tgl_mati_yad?String(base.tgl_mati_yad).slice(0,10):'',deskripsi_jenis_kendaraan:base.deskripsi_jenis_kendaraan||'',samsat_asal_nama:base.samsat_asal_nama||'',prioritas:base.prioritas||'',flag_nomor_hp_valid:base.flag_nomor_hp_valid||'',status:'Belum Dihubungi',print_status:'Belum Dicetak'};setEntries(v=>[row,...v]);if(!import.meta.env.DEV)apiFetch('/api/sightings',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(row)}).catch(console.error);setSelectedNotice(row);setPlate('');setPhoto('');setTab('notice');}
- function setStatus(id,status){setEntries(v=>v.map(e=>e.id===id?{...e,status}:e));if(!import.meta.env.DEV)apiFetch('/api/sightings',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({id,status})}).catch(console.error);}
- function remove(id){setEntries(v=>v.filter(e=>e.id!==id));}
- function blast(r){const hp=phone62(r.nomor_hp);if(!hp)return alert('Nomor WhatsApp tidak tersedia/valid.');window.open(`https://wa.me/${hp}?text=${encodeURIComponent(waText(r))}`,'_blank');setStatus(r.id,'WA Dibuka');}
- function openNotice(r){const notice={...r,notice_id:r.notice_id||buildNoticeId(new Date(r.captured_at||Date.now()))};if(!r.notice_id)setEntries(v=>v.map(e=>e.id===r.id?notice:e));setSelectedNotice(notice);setTab('notice');}
- function markPrinted(id,status='Dicetak'){setEntries(v=>v.map(e=>e.id===id?{...e,print_status:status}:e));setSelectedNotice(v=>v?.id===id?{...v,print_status:status}:v);if(!import.meta.env.DEV)apiFetch('/api/sightings',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({id,print_status:status})}).catch(console.error);}
- function browserPrint(){window.print();if(selectedNotice)markPrinted(selectedNotice.id,'Dicetak via Browser');}
- async function zebraPrint(){if(!selectedNotice)return;const result=await sendToZebraBridge(selectedNotice,printerLanguage);if(result.ok){markPrinted(selectedNotice.id,`Dicetak ${printerLanguage}`);alert('Perintah cetak berhasil dikirim ke Zebra.');}else alert('Bridge Zebra belum tersedia pada perangkat ini. Unduh payload CPCL/ZPL untuk pengujian, atau gunakan Cetak Sistem.');}
- function exportExcel(){const data=dayEntries.map(({foto,...e})=>e);const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Rekap Harian');XLSX.writeFile(wb,`aksi-tempel-${date}.xlsx`);}
- const stats={matched:dayEntries.filter(e=>e.nama_pemilik_terakhir!=='Tidak ditemukan').length,wa:dayEntries.filter(e=>e.status!=='Belum Dihubungi').length};
- if(!session)return <LoginScreen onLogin={account=>{saveSession(account);setSession(account)}}/>;
+ function setStatus(id,status){setEntries(v=>v.map(e=>e.id===id?{...e,status}:e));if(!import.meta.env.DEV)apiFetch('/api/sightings',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({id,status})}).catch(console.error)}
+ function remove(id){if(!isSuperAdmin(session))return setEntries(v=>v.filter(e=>e.id!==id));if(!confirm('Hapus temuan ini dari server?'))return;apiFetch('/api/sightings',{method:'DELETE',headers:{'content-type':'application/json'},body:JSON.stringify({id})}).then(r=>r.json()).then(()=>{setEntries(v=>v.filter(e=>e.id!==id))}).catch(console.error)}
+ function blast(r){const hp=phone62(r.nomor_hp);if(!hp)return alert('Nomor WhatsApp tidak tersedia/valid.');window.open('https://wa.me/'+hp+'?text='+encodeURIComponent(waText(r)),'_blank');setStatus(r.id,'WA Dibuka')}
+ function openNotice(r){const notice={...r,notice_id:r.notice_id||buildNoticeId(new Date(r.captured_at||Date.now()))};if(!r.notice_id)setEntries(v=>v.map(e=>e.id===r.id?notice:e));setSelectedNotice(notice);setTab('notice')}
+ function markPrinted(id,status='Dicetak'){setEntries(v=>v.map(e=>e.id===id?{...e,print_status:status}:e));setSelectedNotice(v=>v?.id===id?{...v,print_status:status}:v);if(!import.meta.env.DEV)apiFetch('/api/sightings',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({id,print_status:status})}).catch(console.error)}
+ async function zebraPrint(){if(!selectedNotice)return;const{sendToZebraBridge}=await import('./printerService');const result=await sendToZebraBridge(selectedNotice,printerLanguage);if(result.ok){markPrinted(selectedNotice.id,'Dicetak '+printerLanguage);alert('Perintah cetak berhasil dikirim ke Zebra.')}else alert('Bridge Zebra belum tersedia pada perangkat ini.')}
+ function browserPrint(){window.print();if(selectedNotice)markPrinted(selectedNotice.id,'Dicetak via Browser')}
+ function exportExcel(){const data=dayEntries.map(({foto,...e})=>e);const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Rekap Harian');XLSX.writeFile(wb,'aksi-tempel-'+date+'.xlsx')}
  const logout=()=>{clearSession();setSession(null);setSelectedNotice(null)};
- return <div className="app">
-  <aside><div className="brand"><div className="logo">AT</div><div><b>AKSI TEMPEL</b><span>Digital Monitoring</span></div></div>
-   <nav><button className={tab==='capture'?'active':''} onClick={()=>setTab('capture')}><Camera/>Ambil Data</button><button className={tab==='daily'?'active':''} onClick={()=>setTab('daily')}><ClipboardList/>Rekap Harian</button><button className={tab==='dashboard'?'active':''} onClick={()=>setTab('dashboard')}><BarChart3/>Dashboard</button><button className={tab==='vehicles'?'active':''} onClick={()=>setTab('vehicles')}><History/>Posisi Terakhir</button><button className={tab==='notice'?'active':''} onClick={()=>setTab('notice')}><Printer/>Cetak Notice</button><button className={tab==='arrears'?'active':''} onClick={()=>setTab('arrears')}><Database/>{session.role==='admin'?'Data Tunggakan':'Tugas Saya'}</button></nav>
-   <div className="account-box"><b>{session.name}</b><span>{session.role==='admin'?'Administrator':'Petugas Lapangan'}</span><button onClick={logout}>Keluar</button></div><div className="dbstate"><Database/><div><b>{loadingDb?'Memuat...':db.length.toLocaleString('id-ID')}</b><span>Database kendaraan</span></div></div>
+
+ if(!session)return <LoginScreen onLogin={a=>{saveSession(a);setSession(a)}}/>;
+
+ const navItems=[
+  {id:'capture',label:'Ambil Data',icon:<Camera/>,roles:['super_admin','admin','user']},
+  {id:'daily',label:'Rekap Harian',icon:<ClipboardList/>,roles:['super_admin','admin','user']},
+  {id:'dashboard',label:'Dashboard',icon:<BarChart3/>,roles:['super_admin','admin']},
+  {id:'vehicles',label:'Posisi Terakhir',icon:<History/>,roles:['super_admin','admin','user']},
+  {id:'notice',label:'Cetak Notice',icon:<Printer/>,roles:['super_admin','admin','user']},
+  {id:'arrears',label:'Data Tunggakan',icon:<Database/>,roles:['super_admin','admin']},
+  {id:'users',label:'Kelola Akun',icon:<UserPlus/>,roles:['super_admin','admin']},
+ ];
+ const tabs=navItems.filter(item=>item.roles.includes(session.role));
+
+ const tabTitles={capture:'Input Aksi Tempel',daily:'Rekap Harian',dashboard:'Dashboard Monitoring',vehicles:'Posisi Kendaraan Terakhir',notice:'Notice Tim Pembina Samsat',arrears:session.role==='super_admin'?'Kelola Data Tunggakan':'Data Tunggakan',users:'Kelola Akun Petugas'};
+
+ return<div className="app">
+  <aside>
+   <div className="brand"><div className="logo">AT</div><div><b>AKSI TEMPEL</b><span>Digital Monitoring</span></div></div>
+   <nav>{tabs.map(t=><button key={t.id} className={tab===t.id?'active':''} onClick={()=>setTab(t.id)}>{t.icon}{t.label}</button>)}</nav>
+   <div className="account-box"><b>{session.name}</b><span>{session.role==='super_admin'?'Super Admin':session.role==='admin'?'Administrator':'Petugas Lapangan'}</span><button onClick={logout}>Keluar</button></div>
+   <div className="dbstate"><Database/><div><b>{loadingDb?'Memuat...':db.length.toLocaleString('id-ID')}</b><span>Database kendaraan</span></div></div>
   </aside>
-  <main><header className="screen-header"><div><h1>{tab==='capture'?'Input Aksi Tempel':tab==='daily'?'Rekap Harian':tab==='dashboard'?'Dashboard Monitoring':tab==='vehicles'?'Posisi Kendaraan Terakhir':tab==='arrears'?(session.role==='admin'?'Kelola Data Tunggakan':'Tugas Tunggakan Saya'):'Notice Tim Pembina Samsat'}</h1><p>OCR, bukti foto, histori kendaraan, dan tindak lanjut lapangan</p></div><div className="datebox"><CalendarDays/><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></div></header>
-  {tab==='capture'&&<section className="capture-grid"><div className="card photo-card"><div className="card-title"><Camera/>Foto Plat Nomor</div><div className={'dropzone '+(photo?'has-photo':'')} onClick={()=>inputRef.current.click()}>{photo?<><img src={photo}/><button className="clear" onClick={e=>{e.stopPropagation();setPhoto('')}}><X/></button></>:<><div className="camera-circle"><Camera/></div><b>Ambil foto atau unggah gambar</b><span>Pastikan plat terlihat jelas dan memenuhi bingkai</span></>} {ocr&&<div className="ocr"><RefreshCw className="spin"/>Membaca plat... {progress}%</div>}</div><input ref={inputRef} hidden type="file" accept="image/*" capture="environment" onChange={e=>onFile(e.target.files[0])}/><button className="outline" onClick={()=>inputRef.current.click()}><Upload/>Pilih Foto</button></div>
-   <div className="card form-card"><div className="card-title"><ClipboardList/>Data Kegiatan</div><label>Nomor Polisi<div className="input-icon"><Search/><input value={plate} onChange={e=>setPlate(e.target.value.toUpperCase())} placeholder="BM 1234 AB"/></div></label>
-    {plate&&<div className={'match '+(match?'found':'notfound')}>{match?<><CheckCircle2/><div><b>Data ditemukan</b><span>{match.nama_pemilik_terakhir} • {match.deskripsi_jenis_kendaraan}</span></div></>:<><AlertTriangle/><div><b>Belum ditemukan di database</b><span>Tetap dapat disimpan sebagai temuan baru</span></div></>}</div>}
-    <div className="two"><label>Petugas<div className="input-icon"><User/><input value={session.name} readOnly/></div></label><label>Tanggal<input type="date" value={date} onChange={e=>setDate(e.target.value)}/></label></div>
-    <label>Lokasi Pengambilan<div className="location-row"><div className="input-icon"><MapPin/><input value={location} onChange={e=>setLocation(e.target.value)} placeholder="Contoh: Pasar Cik Puan / koordinat"/></div><button className="loc" onClick={getLocation}><MapPin/></button></div></label>
-    <button className="primary" onClick={add}><CheckCircle2/>Simpan ke Rekap Hari Ini</button>
-   </div></section>}
-  {tab==='daily'&&<><section className="stats"><Stat label="Temuan Hari Ini" value={captured} icon={<Camera/>}/><Stat label="Cocok Database" value={stats.matched} icon={<Database/>}/><Stat label="Nomor WA Valid" value={validPhones} icon={<MessageCircle/>}/><Stat label="Notice Tercetak" value={dayEntries.filter(e=>e.print_status&&e.print_status!=='Belum Dicetak').length} icon={<Printer/>}/></section><section className="card table-card"><div className="toolbar"><div className="input-icon search"><Search/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Cari nopol, pemilik, lokasi, petugas..."/></div><button className="outline compact" onClick={exportExcel}><FileDown/>Export Excel</button></div><DataTable rows={filtered} blast={blast} remove={remove} setStatus={setStatus} openNotice={openNotice}/></section></>}
-  {tab==='dashboard'&&<><section className="stats"><Stat label="Total Temuan" value={visibleEntries.length} icon={<Camera/>}/><Stat label="Hari Aktif" value={new Set(visibleEntries.map(e=>e.date)).size} icon={<CalendarDays/>}/><Stat label="WA Tersedia" value={visibleEntries.filter(e=>phone62(e.nomor_hp)).length} icon={<MessageCircle/>}/><Stat label="Selesai" value={visibleEntries.filter(e=>e.status==='Selesai').length} icon={<CheckCircle2/>}/></section><section className="dashboard-grid">{session.role==='admin'&&<div className="card"><div className="card-title"><User/>Kinerja Seluruh Petugas</div>{[...new Set(entries.map(e=>e.petugas).filter(Boolean))].map(u=>{const n=entries.filter(e=>e.petugas===u).length;return <div className="barrow" key={u}><span>{u}</span><div><i style={{width:`${Math.min(100,n/Math.max(1,entries.length)*100)}%`}}/></div><b>{n}</b></div>})}</div>}<div className="card"><div className="card-title"><MapPin/>Lokasi Teratas {session.role==='user'?'Saya':''}</div>{Object.entries(visibleEntries.reduce((a,e)=>(a[e.lokasi]=(a[e.lokasi]||0)+1,a),{})).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=><div className="rank" key={k}><span>{k}</span><b>{v}</b></div>)}{!visibleEntries.length&&<div className="empty">Belum ada data kegiatan.</div>}</div></section></>}
-  {tab==='vehicles'&&<VehicleHistory latest={latestSightings} finder={finder} setFinder={setFinder} results={foundSightings} openNotice={openNotice}/>} 
-  {tab==='notice'&&<NoticeModule notice={selectedNotice} entries={visibleEntries} select={setSelectedNotice} language={printerLanguage} setLanguage={setPrinterLanguage} browserPrint={browserPrint} zebraPrint={zebraPrint} download={()=>selectedNotice&&downloadPrinterPayload(selectedNotice,printerLanguage)}/>} 
-  {tab==='arrears'&&<ArrearsModule session={session}/>} 
+  <main>
+   <header className="screen-header"><div><h1>{tabTitles[tab]||'Aksi Tempel'}</h1><p>OCR, bukti foto, histori kendaraan, dan tindak lanjut lapangan</p></div><div className="datebox"><span className="icon">{'\u{1F4C5}'}</span><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></div></header>
+   {tab==='capture'&&<CaptureView onCapture={handleCapture} db={db} loadingDb={loadingDb}/>}
+   {tab==='daily'&&<DailyView date={date} setDate={setDate} entries={visibleEntries} session={session} setStatus={isUser(session)?()=>{}:setStatus} remove={remove} blast={isAdmin(session)?blast:()=>{}} openNotice={openNotice} exportExcel={exportExcel}/>}
+   {tab==='dashboard'&&<DashboardView entries={visibleEntries} session={session}/>}
+   {tab==='vehicles'&&<VehicleHistoryView entries={visibleEntries} openNotice={openNotice}/>}
+   {tab==='notice'&&<NoticeView notice={selectedNotice} entries={visibleEntries} select={setSelectedNotice} language={printerLanguage} setLanguage={setPrinterLanguage} browserPrint={browserPrint} zebraPrint={zebraPrint} download={()=>selectedNotice&&downloadPrinterPayload(selectedNotice,printerLanguage)}/>}
+   {tab==='arrears'&&<ArrearsView session={session}/>}
+   {tab==='users'&&<UserManagementView/>}
   </main>
  </div>
 }
-function LoginScreen({onLogin}){const [username,setUsername]=useState(''),[password,setPassword]=useState(''),[error,setError]=useState('');async function submit(e){e.preventDefault();const account=await authenticate(username,password);if(!account){setError('Username atau password tidak sesuai.');return}setError('');onLogin(account)}return <main className="login-page"><section className="login-panel"><div className="login-brand"><div className="logo">AT</div><div><b>AKSI TEMPEL DIGITAL</b><span>Tim Pembina Samsat Provinsi Riau</span></div></div><h1>Masuk Petugas</h1><p>Gunakan akun yang telah diberikan untuk mengakses kegiatan lapangan.</p><form onSubmit={submit}><label>Username<input autoCapitalize="none" autoCorrect="off" autoComplete="username" value={username} onChange={e=>setUsername(e.target.value)} placeholder="nama.pengguna"/></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••••••"/></label>{error&&<div className="login-error">{error}</div>}<button className="primary" type="submit">Masuk</button></form><small>Akses aktivitas dibatasi sesuai level akun.</small></section></main>}
-function Stat({label,value,icon}){return <div className="stat"><div>{icon}</div><span>{label}</span><b>{value}</b></div>}
-function DataTable({rows,blast,remove,setStatus,openNotice}){return <div className="table-wrap"><table><thead><tr><th>Waktu</th><th>Nopol & Kendaraan</th><th>Pemilik</th><th>Petugas / Lokasi</th><th>Bukti</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td><b>{r.time}</b><small>{r.date}</small></td><td><strong className="plate">{r.no_polisi}</strong><small>{r.deskripsi_jenis_kendaraan||'Tidak diketahui'}</small></td><td><b>{r.nama_pemilik_terakhir}</b><small>{r.nomor_hp&&r.nomor_hp!=='0'?r.nomor_hp:'WA tidak tersedia'}</small></td><td><b>{r.petugas}</b><small>{r.lokasi}</small></td><td>{r.foto?<img className="evidence-thumb" src={r.foto}/>:<small>Tanpa foto</small>}<small>{r.print_status||'Belum Dicetak'}</small></td><td><select className="status" value={r.status} onChange={e=>setStatus(r.id,e.target.value)}><option>Belum Dihubungi</option><option>WA Dibuka</option><option>Sudah Dihubungi</option><option>Selesai</option></select></td><td><div className="actions"><button title="Cetak notice" onClick={()=>openNotice(r)}><Printer/></button><button title="WhatsApp" onClick={()=>blast(r)}><MessageCircle/></button><button className="danger" title="Hapus" onClick={()=>remove(r.id)}><Trash2/></button></div></td></tr>)}{!rows.length&&<tr><td colSpan="7"><div className="empty">Belum ada temuan pada tanggal ini.</div></td></tr>}</tbody></table></div>}
 
-function VehicleHistory({latest,finder,setFinder,results,openNotice}){const list=finder?results:latest;return <><section className="card finder-card"><div className="card-title"><Search/>Cari Riwayat Kendaraan</div><div className="input-icon search"><Search/><input value={finder} onChange={e=>setFinder(e.target.value.toUpperCase())} placeholder="Masukkan nomor polisi, contoh BM 9929 FN"/></div><p className="privacy-note">Gunakan data posisi dan foto hanya untuk kebutuhan pelayanan atau penelusuran yang sah dan berwenang.</p></section><section className="sighting-grid">{list.map((r,index)=><article className="card sighting" key={r.id}>{r.foto?<img src={r.foto} alt={`Bukti ${r.no_polisi}`}/>:<div className="no-photo"><Camera/>Tidak ada foto</div>}<div className="sighting-body"><div className="sighting-top"><strong className="plate">{r.no_polisi}</strong>{index===0&&finder?<span className="latest-badge">Terakhir terlihat</span>:null}</div><h3>{r.date} • {r.time}</h3><p><MapPin/> {r.lokasi}</p><p><User/> {r.petugas}</p><small>ID Notice: {r.notice_id||'-'}</small><button className="outline" onClick={()=>openNotice(r)}><Printer/>Buka Notice</button></div></article>)}{!list.length&&<div className="card empty">Belum ada riwayat kendaraan yang cocok.</div>}</section></>}
-
-function NoticeModule({notice,entries,select,language,setLanguage,browserPrint,zebraPrint,download}){const capability=useMemo(getZebraCapability,[]);const [printer,setPrinter]=useState({connected:false,status:capability.bridgeAvailable?'Siap dihubungkan':'Bridge belum tersedia'});async function connect(){try{const r=await connectZebraBridge();setPrinter({connected:Boolean(r?.ok||r?.connected),status:r?.name||r?.deviceName||(r?.ok?'Zebra tersambung':'Koneksi gagal')})}catch(e){setPrinter({connected:false,status:e?.message||'Koneksi gagal'})}}async function refresh(){const r=await getZebraBridgeStatus();setPrinter({connected:Boolean(r?.connected),status:r?.name||r?.deviceName||(r?.connected?'Zebra tersambung':'Tidak tersambung')})}async function disconnect(){await disconnectZebraBridge();setPrinter({connected:false,status:'Koneksi diputus'})}async function test(){try{await testZebraBridge(language);alert('Test print berhasil dikirim. Pastikan kertas keluar dari printer.')}catch(e){alert('Test print gagal: '+(e?.message||e))}}return <section className="notice-layout"><div className="card notice-controls"><div className="card-title"><Printer/>Kontrol Cetak Zebra iMZ320</div><div className={'printer-status '+(printer.connected?'connected':'disconnected')}><i/><div><b>{printer.connected?'Printer tersambung':'Printer belum tersambung'}</b><span>{printer.status}</span></div></div><div className="printer-connect-actions"><button className="outline" onClick={connect} disabled={!capability.bridgeAvailable}>Hubungkan</button><button className="outline" onClick={refresh} disabled={!capability.bridgeAvailable}>Periksa</button><button className="outline" onClick={disconnect} disabled={!printer.connected}>Putuskan</button></div><label>Pilih temuan<select value={notice?.id||''} onChange={e=>select(entries.find(x=>x.id===e.target.value)||null)}><option value="">Pilih kendaraan</option>{entries.map(e=><option key={e.id} value={e.id}>{e.no_polisi} — {e.date} {e.time}</option>)}</select></label><label>Bahasa printer<select value={language} onChange={e=>setLanguage(e.target.value)}><option>CPCL</option><option>ZPL</option></select></label><button className="outline" disabled={!printer.connected} onClick={test}>Test Print</button><button className="primary" disabled={!notice||!printer.connected} onClick={zebraPrint}><Printer/>Cetak ke Zebra</button><button className="outline" disabled={!notice} onClick={browserPrint}>Cetak Sistem / Simpan PDF</button><button className="outline" disabled={!notice} onClick={download}><FileDown/>Unduh Payload {language}</button><div className="printer-note"><b>{capability.platform==='ios'?'iPhone memerlukan Zebra MFi':capability.platform==='android'?'Android memerlukan Zebra SDK bridge':'Gunakan aplikasi mobile native'}</b><span>Bluetooth Classic/SPP tidak dapat dijamin dari browser. Tombol cetak Zebra hanya aktif setelah bridge native memverifikasi koneksi.</span></div></div>{notice?<ThermalNotice notice={notice}/>:<div className="card empty">Simpan hasil OCR atau pilih temuan untuk membuat notice.</div>}</section>}
-
-function ArrearsModule({session}){const [rows,setRows]=useState([]),[selected,setSelected]=useState([]),[assignee,setAssignee]=useState('siti.izriskiah'),[busy,setBusy]=useState(false),[message,setMessage]=useState('');const input=useRef();async function load(){try{const r=await apiFetch('/api/arrears');const d=await r.json();if(!r.ok)throw new Error(d.error);setRows(d.rows||[])}catch(e){setMessage(e.message||'Database produksi belum tersedia.')}}useEffect(()=>{load()},[]);async function upload(file){if(!file)return;setBusy(true);try{const wb=XLSX.read(await file.arrayBuffer(),{type:'array'}),data=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});const r=await apiFetch('/api/arrears/import',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({rows:data})}),d=await r.json();if(!r.ok)throw new Error(d.error);setMessage(`${d.imported} data tunggakan berhasil dimasukkan.`);await load()}catch(e){setMessage(e.message)}finally{setBusy(false)}}async function assign(){if(!selected.length)return;setBusy(true);try{const r=await apiFetch('/api/arrears/assign',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({ids:selected,assignee})}),d=await r.json();if(!r.ok)throw new Error(d.error);setMessage(`${d.assigned} data dibagikan ke ${assignee}.`);setSelected([]);await load()}catch(e){setMessage(e.message)}finally{setBusy(false)}}return <section className="card table-card">{session.role==='admin'&&<div className="arrears-admin"><input ref={input} hidden type="file" accept=".xlsx,.xls,.csv" onChange={e=>upload(e.target.files[0])}/><button className="outline compact" onClick={()=>input.current.click()} disabled={busy}><Upload/>Tambah Data Tunggakan</button><select value={assignee} onChange={e=>setAssignee(e.target.value)}>{ACCOUNTS.filter(a=>a.role==='user').map(a=><option key={a.username} value={a.username}>{a.name}</option>)}</select><button className="primary compact" onClick={assign} disabled={busy||!selected.length}>Bagikan {selected.length||''} Data</button></div>}{message&&<div className="sync-message">{message}</div>}<div className="table-wrap"><table><thead><tr>{session.role==='admin'&&<th>Pilih</th>}<th>Nopol</th><th>Pemilik</th><th>Jatuh Tempo</th><th>Prioritas</th><th>Ditugaskan Kepada</th><th>Status</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}>{session.role==='admin'&&<td><input type="checkbox" checked={selected.includes(r.id)} onChange={e=>setSelected(v=>e.target.checked?[...v,r.id]:v.filter(x=>x!==r.id))}/></td>}<td><strong className="plate">{r.no_polisi}</strong></td><td><b>{r.nama_pemilik||'-'}</b><small>{r.nomor_hp||'WA tidak tersedia'}</small></td><td>{r.jatuh_tempo||'-'}</td><td>{r.prioritas||'-'}</td><td>{r.assigned_to||'Belum dibagikan'}</td><td>{r.status}</td></tr>)}{!rows.length&&<tr><td colSpan="7"><div className="empty">Belum ada data tunggakan.</div></td></tr>}</tbody></table></div></section>}
-
-function ThermalQr(){const [src,setSrc]=useState('');useEffect(()=>{QRCode.toDataURL(TAX_INFO_URL,{width:240,margin:1,errorCorrectionLevel:'M'}).then(setSrc).catch(console.error)},[]);return <a className="qr-placeholder" href={TAX_INFO_URL} target="_blank" rel="noreferrer" aria-label="Buka Info Pajak Bapenda Riau">{src?<img src={src} alt="QR Info Pajak Bapenda Riau"/>:<span>QR</span>}<small>Scan untuk cek info pajak terkini</small></a>}
-function ThermalNotice({notice}){return <article className="thermal-notice" id="thermal-notice"><div className="notice-heading"><b>TIM PEMBINA SAMSAT</b><strong>PROVINSI RIAU</strong></div><div className="notice-rule"/><h2>PEMBERITAHUAN KEPATUHAN<br/>PAJAK KENDARAAN BERMOTOR</h2><div className="notice-plate">{notice.no_polisi}</div><dl><div><dt>Terpantau</dt><dd>{notice.date} • {notice.time} WIB</dd></div><div><dt>Lokasi</dt><dd>{notice.lokasi}</dd></div></dl><p>Berdasarkan hasil monitoring lapangan, kendaraan ini <b>terindikasi belum memenuhi kewajiban pembayaran PKB dan/atau SWDKLLJ</b> sesuai data yang tersedia pada saat pemeriksaan.</p><p>Apabila kewajiban telah dipenuhi, abaikan pemberitahuan ini. Terima kasih atas kepatuhan Anda.</p><div className="notice-benefit"><b>PEMBAYARAN RESMI</b><span>Kantor Samsat • Samsat Keliling<br/>Gerai Samsat • SIGNAL</span></div><ThermalQr/><div className="souvenir-message"><b>BAWA KERTAS INI KE SAMSAT</b><span>untuk melakukan pembayaran dan dapatkan souvenir dari Tim Pembina Samsat.</span></div><div className="notice-id">ID NOTICE<br/><b>{notice.notice_id}</b></div><footer><b>BAPENDA • POLRI • PT JASA RAHARJA</b><span>TIM PEMBINA SAMSAT PROVINSI RIAU</span></footer></article>}
 createRoot(document.getElementById('root')).render(<App/>);
