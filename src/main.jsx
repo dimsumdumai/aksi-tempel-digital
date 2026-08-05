@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client';
 import * as XLSX from 'xlsx';
 import './styles.css';
 import {isSuperAdmin,isAdmin,isUser,apiFetch,authenticate,clearSession,loadSession,saveSession} from './auth';
-import {LoginScreen,CaptureView,DailyView,DashboardView,VehicleHistoryView,NoticeView,ArrearsView,ThermalNotice,ThermalQr,UserManagementView} from './views';
+import {LoginScreen,CaptureView,DailyView,DashboardView,VehicleHistoryView,NoticeView,ArrearsView,ThermalNotice,ThermalQr,UserManagementView,ProfileSettingsView} from './views';
 import {buildNoticeId,downloadPrinterPayload} from './printerService';
 
 const makeIcon=s=>(p)=><span className={p?.className||'icon'} aria-hidden="true">{s}</span>;
@@ -54,10 +54,11 @@ function App(){
   {id:'notice',label:'Cetak Notice',icon:<Printer/>,roles:['super_admin','admin','user']},
   {id:'arrears',label:'Data Tunggakan',icon:<Database/>,roles:['super_admin','admin']},
   {id:'users',label:'Kelola Akun',icon:<UserPlus/>,roles:['super_admin','admin']},
+  {id:'settings',label:'Profil & Setting',icon:<Settings/>,roles:['super_admin','admin','user']},
  ];
  const tabs=navItems.filter(item=>item.roles.includes(session.role));
 
- const tabTitles={capture:'Input Aksi Tempel',daily:'Rekap Harian',dashboard:'Dashboard Monitoring',vehicles:'Posisi Kendaraan Terakhir',notice:'Notice Tim Pembina Samsat',arrears:session.role==='super_admin'?'Kelola Data Tunggakan':'Data Tunggakan',users:'Kelola Akun Petugas'};
+ const tabTitles={capture:'Input Aksi Tempel',daily:'Rekap Harian',dashboard:'Dashboard Monitoring',vehicles:'Posisi Kendaraan Terakhir',notice:'Notice Tim Pembina Samsat',arrears:session.role==='super_admin'?'Kelola Data Tunggakan':'Data Tunggakan',users:'Kelola Akun Petugas',settings:'Profil & Pengaturan'};
 
  return<div className="app">
   <aside>
@@ -75,6 +76,7 @@ function App(){
    {tab==='notice'&&<NoticeView notice={selectedNotice} entries={visibleEntries} select={setSelectedNotice} language={printerLanguage} setLanguage={setPrinterLanguage} browserPrint={browserPrint} zebraPrint={zebraPrint} download={()=>selectedNotice&&downloadPrinterPayload(selectedNotice,printerLanguage)}/>}
    {tab==='arrears'&&<ArrearsView session={session}/>}
    {tab==='users'&&<UserManagementView/>}
+   {tab==='settings'&&<ProfileSettingsView session={session} onLogout={logout}/>}
   </main>
  </div>
 }

@@ -37,10 +37,77 @@ export default async function handler(req,res){
       return json(res,200,{token:raw,user:{username:data.username,name:data.name,role:data.role,position:data.position}});
     }
 
+    // Forgot password (public, no auth required)
+    if(path==='/api/auth/forgot-password'&&req.method==='POST'){
+      const body=bodyOf(req),username=clean(body.username,80).toLowerCase();
+      const {data}=await client.from('app_users').select('username,email,active').eq('username',username).maybeSingle();
+      if(!data?.active)return json(res,200,{message:'Jika akun tersebut terdaftar, token reset akan dikirim.'});
+      const raw=token(),rawHash=tokenHash(raw),expiresAt=new Date(Date.now()+60*60*1000).toISOString();
+      await client.from('password_reset_tokens').delete().eq('username',username);
+      const {error}=await client.from('password_reset_tokens').insert({username,token_hash:rawHash,expires_at:expiresAt});
+      if(error)throw error;
+      return json(res,200,{reset_token:raw,message:'Token reset berhasil dibuat.',email:data.email||'Tidak terdaftar'});
+    }
+
+    // Reset password (public)
+    if(path==='/api/auth/reset-password'&&req.method==='POST'){
+      const body=bodyOf(req),raw=clean(body.reset_token,200),newPassword=clean(body.new_password,200);
+      if(!raw||!newPassword)return json(res,400,{error:'Token dan password baru diperlukan.'});
+      if(newPassword.length<6)return json(res,400,{error:'Password baru minimal 6 karakter.'});
+      const {data:tokenRow}=await client.from('password_reset_tokens').select('username,expires_at').eq('token_hash',tokenHash(raw)).maybeSingle();
+      if(!tokenRow||new Date(tokenRow.expires_at)<=new Date())return json(res,400,{error:'Token tidak valid atau sudah kedaluwarsa.'});
+      const hash=await bcrypt.hash(newPassword,10);
+      const {error:e1}=await client.from('app_users').update({password_hash:hash}).eq('username',tokenRow.username);
+      if(e1)throw e1;
+      await client.from('password_reset_tokens').delete().eq('username',tokenRow.username);
+      return json(res,200,{reset:true});
+    }
+
     const user=await currentUser(req,client);
     if(!user) return json(res,401,{error:'Sesi tidak valid. Silakan masuk kembali.'});
 
     if(path==='/api/auth/me'&&req.method==='GET') return json(res,200,{user});
+
+    // Profile: change password
+    if(path==='/api/auth/change-password'&&req.method==='POST'){
+      const body=bodyOf(req),oldPassword=clean(body.old_password,200),newPassword=clean(body.new_password,200);
+      if(!oldPassword||!newPassword)return json(res,400,{error:'Password lama dan baru wajib diisi.'});
+      if(newPassword.length<6)return json(res,400,{error:'Password baru minimal 6 karakter.'});
+      const {data}=await client.from('app_users').select('password_hash').eq('username',user.username).single();
+      if(!data||!(await bcrypt.compare(oldPassword,data.password_hash)))return json(res,400,{error:'Password lama tidak sesuai.'});
+      const hash=await bcrypt.hash(newPassword,10);
+      const {error}=await client.from('app_users').update({password_hash:hash}).eq('username',user.username);
+      if(error)throw error;return json(res,200,{updated:true});
+    }
+
+    // Profile: link email
+    if(path==='/api/auth/link-email'&&req.method==='POST'){
+      const body=bodyOf(req),email=clean(body.email,200);
+      if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return json(res,400,{error:'Format email tidak valid.'});
+      const raw=token(),rawHash=tokenHash(raw),expiresAt=new Date(Date.now()+24*60*60*1000).toISOString();
+      await client.from('email_verification_tokens').delete().eq('username',user.username);
+      const {error}=await client.from('email_verification_tokens').insert({username:user.username,token_hash:rawHash,email,expires_at:expiresAt});
+      if(error)throw error;
+      return json(res,200,{verification_token:raw,message:'Token verifikasi berhasil dibuat. Gunakan POST /api/auth/verify-email dengan token ini.'});
+    }
+
+    // Profile: verify email
+    if(path==='/api/auth/verify-email'&&req.method==='POST'){
+      const body=bodyOf(req),raw=clean(body.verification_token,200);
+      if(!raw)return json(res,400,{error:'Token verifikasi diperlukan.'});
+      const {data:tokenRow}=await client.from('email_verification_tokens').select('email,expires_at').eq('username',user.username).eq('token_hash',tokenHash(raw)).maybeSingle();
+      if(!tokenRow||new Date(tokenRow.expires_at)<=new Date())return json(res,400,{error:'Token tidak valid atau sudah kedaluwarsa.'});
+      const {error:e1}=await client.from('app_users').update({email:tokenRow.email,email_verified:true}).eq('username',user.username);
+      if(e1)throw e1;
+      await client.from('email_verification_tokens').delete().eq('username',user.username);
+      return json(res,200,{email:tokenRow.email,verified:true});
+    }
+
+    // Profile: get profile
+    if(path==='/api/profile'&&req.method==='GET'){
+      const {data}=await client.from('app_users').select('username,name,position,role,email,email_verified,active,created_at').eq('username',user.username).single();
+      return json(res,200,{profile:data||{}});
+    }
 
     // User management (admin+)
     if(path==='/api/users'&&req.method==='GET'){
