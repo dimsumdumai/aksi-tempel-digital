@@ -3,6 +3,7 @@ dist/
 .DS_Store
 .env
 .env.*
+.env.local
 !.env.example
 .wrangler/
 .vercel/
@@ -10,3 +11,4 @@ dist/
 supabase/.temp/
 *.log
 public/database-gaspoll.xlsx
+.vercel

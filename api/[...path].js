@@ -61,6 +61,14 @@ export default async function handler(req,res){
       const {error}=await client.from('sightings').insert({id,notice_id:noticeId,no_polisi:plate,created_by:user.username,petugas_name:user.name,lokasi:clean(body.lokasi,1000),captured_at:body.captured_at||new Date().toISOString(),status:clean(body.status,80)||'Belum Dihubungi',print_status:clean(body.print_status,80)||'Belum Dicetak',evidence_key:evidenceKey,vehicle_data:vehicleData});
       if(error)throw error;return json(res,201,{saved:true,evidence:!!evidenceKey});
     }
+    if(path==='/api/sightings'&&req.method==='PATCH'){
+      const body=bodyOf(req),id=clean(body.id,80);
+      if(!id) return json(res,400,{error:'ID temuan diperlukan.'});
+      const fields={};if(body.status)fields.status=clean(body.status,80);if(body.print_status)fields.print_status=clean(body.print_status,80);
+      if(!Object.keys(fields).length) return json(res,400,{error:'Tidak ada field yang diupdate.'});
+      const {error}=await client.from('sightings').update(fields).eq('id',id);if(error)throw error;
+      return json(res,200,{updated:true});
+    }
     return json(res,404,{error:'Layanan tidak ditemukan.'});
   }catch(error){console.error('API error',error?.code||error?.name||'unknown');return json(res,500,{error:'Layanan sedang bermasalah. Silakan coba kembali.'});}
 }

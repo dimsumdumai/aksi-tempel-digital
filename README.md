@@ -1,22 +1,59 @@
 # Aksi Tempel Digital
 
-Aplikasi React/Vite untuk digitalisasi kegiatan Aksi Tempel-Tempel:
-- OCR foto plat nomor menggunakan Tesseract.js.
-- Pencocokan otomatis dengan database GASPOL Excel.
-- Petugas dummy: Dimas, Siti, Imelda, Lina, Luisi.
-- Lokasi manual atau koordinat GPS browser.
-- Rekap per hari, monitoring status, WhatsApp individual, ekspor Excel.
-- Penyimpanan temuan di localStorage browser.
+Aplikasi React/Vite untuk digitalisasi kegiatan **Aksi Tempel-Tempel Tim Pembina Samsat Provinsi Riau** — identifikasi kendaraan dengan kewajiban pajak belum lunas (PKB/SWDKLLJ) melalui pemindaian plat nomor secara langsung di lapangan.
 
-## Menjalankan
+## Fitur Utama
+
+- **OCR plat nomor otomatis** dengan Tesseract.js — preprocessing grayscale, kontras, threshold, dan multi-region crop untuk akurasi lebih baik di kondisi lapangan.
+- **Pencocokan otomatis** dengan database tunggakan GASPOL, termasuk fuzzy matching (edit distance) untuk toleransi kesalahan OCR.
+- **Geolokasi GPS** via browser atau input manual.
+- **Rekap harian, dashboard, dan posisi kendaraan terakhir** — visualisasi kinerja petugas dan lokasi temuan.
+- **Cetak notice thermal** ke printer Zebra iMZ320 dengan format CPCL atau ZPL, melalui bridge native iOS/Android atau fallback sistem browser.
+- **Penyampaian edukasi via WhatsApp** — tautan wa.me dengan template pesan.
+- **Manajemen data tunggakan** — admin dapat mengimpor data Excel dan membagikan ke petugas lapangan.
+
+## Stack
+
+- **Frontend**: React 19 + Vite 8
+- **Backend**: Vercel-style serverless functions (api/[...path].js) + Supabase (PostgreSQL + Storage)
+- **OCR**: Tesseract.js 7
+- **Auth**: bcryptjs + token session hash, kedaluwarsa 8 jam
+- **Printer**: Zebra iMZ320 (CPCL/ZPL) melalui window.ZebraPrinterBridge
+
+## Menjalankan Lokal
+
 ```bash
 npm install
 npm run dev
 ```
-Buka alamat lokal yang ditampilkan Vite.
 
-## Catatan
-Database sumber berada di `public/database-gaspoll.xlsx` dan dibaca saat aplikasi dibuka. Untuk produksi multi-user, localStorage perlu diganti backend/database terpusat serta autentikasi pengguna.
+Server Vite berjalan di http://localhost:5173. Untuk mengarahkan panggilan /api/* ke backend lokal, jalankan juga `npx vercel dev` di terminal lain, atau set `VITE_API_PROXY` ke URL server lokal Anda.
+
+**Tanpa backend** (mode DEV): aplikasi otomatis membaca database dari `public/database-gaspoll.xlsx` dan menyimpan temuan di `localStorage`. Mode ini cocok untuk demonstrasi offline.
+
+## Environment Variables
+
+Salin `.env.example` ke `.env.local` dan isi nilainya:
+
+```
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=replace-in-vercel-only
+```
+
+`SUPABASE_SERVICE_ROLE_KEY` hanya boleh tersimpan di environment Vercel, tidak di-commit ke repository.
+
+## Struktur Project
+
+```
+src/main.jsx           Komponen React utama dan seluruh UI
+src/auth.js            Autentikasi dan session management
+src/printerService.js  Generator CPCL/ZPL untuk printer Zebra
+src/styles.css         Seluruh styling
+api/[...path].js       API handler (auth, arrears, sightings)
+api/_lib.js            Shared utilities (Supabase client, sanitasi)
+supabase/migrations/   Skema database PostgreSQL
+scripts/               Build dan deployment scripts
+```
 
 ## Pembaruan OCR v2
 
