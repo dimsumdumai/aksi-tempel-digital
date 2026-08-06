@@ -1,6 +1,9 @@
-import bcrypt from 'bcryptjs';
+import bcryptjs from 'bcryptjs';
 import {createHmac} from 'node:crypto';
 import {clean,db,json,token,tokenHash} from '../_lib.js';
+
+// bcryptjs v3 ESM interop: default export might be the module object
+const bcrypt=(typeof bcryptjs.compare==='function')?bcryptjs:(bcryptjs.default||bcryptjs);
 
 const CAPTCHA_SECRET='aksi-tempel-captcha-2024';
 const captchaAnswer=ans=>String(ans).trim();
