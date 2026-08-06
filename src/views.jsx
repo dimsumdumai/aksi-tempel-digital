@@ -2,7 +2,7 @@ import React,{useEffect,useMemo,useRef,useState} from 'react';
 import QRCode from 'qrcode';
 import Tesseract from 'tesseract.js';
 import * as XLSX from 'xlsx';
-import {buildNoticeId,connectZebraBridge,disconnectZebraBridge,downloadPrinterPayload,getZebraBridgeStatus,getZebraCapability,sendToZebraBridge,testZebraBridge,TAX_INFO_URL} from './printerService';
+import {buildNoticeId,connectZebraBridge,disconnectZebraBridge,downloadPrinterPayload,getZebraBridgeStatus,getZebraCapability,sendToZebraBridge,testZebraBridge,TAX_INFO_URL,isWebBluetoothAvailable,connectWebBluetooth,sendViaWebBluetooth,disconnectWebBluetooth,getWebBluetoothStatus} from './printerService';
 import {ACCOUNTS,apiFetch,getCaptcha,authenticate,isSuperAdmin,isAdmin,isUser} from './auth';
 
 const makeIcon=s=>(p)=><span className={p?.className||'icon'} aria-hidden="true">{s}</span>;
@@ -90,13 +90,41 @@ function VehicleHistoryView({entries,openNotice}){
 
 function NoticeView({notice,entries,select,language,setLanguage,browserPrint,zebraPrint,download}){
  const capability=useMemo(getZebraCapability,[]);
- const [printer,setPrinter]=useState({connected:false,status:capability.bridgeAvailable?'Siap dihubungkan':'Bridge belum tersedia'});
+ const hasBle=isWebBluetoothAvailable();
+ const hasBridge=capability.bridgeAvailable;
+ const [mode,setMode]=useState(hasBridge?'bridge':'ble');
+ const [printer,setPrinter]=useState({connected:false,status:(hasBridge||hasBridge)?'Pilih metode koneksi':'Tidak ada metode koneksi tersedia'});
  const [showHelp,setShowHelp]=useState(false);
- async function connect(){try{const r=await connectZebraBridge();setPrinter({connected:Boolean(r?.ok||r?.connected),status:r?.name||r?.deviceName||(r?.ok?'Zebra tersambung':'Koneksi gagal')})}catch(e){setPrinter({connected:false,status:e?.message||'Koneksi gagal'})}}
- async function refresh(){const r=await getZebraBridgeStatus();setPrinter({connected:Boolean(r?.connected),status:r?.name||r?.deviceName||(r?.connected?'Zebra tersambung':'Tidak tersambung')})}
- async function disconnect(){await disconnectZebraBridge();setPrinter({connected:false,status:'Koneksi diputus'})}
- async function test(){try{await testZebraBridge(language);alert('Test print berhasil dikirim.')}catch(e){alert('Test print gagal: '+(e?.message||e))}}
- return<section className="notice-layout"><div className="card notice-controls"><div className="card-title"><Printer/>Cetak Notice</div><div className={'printer-status '+(printer.connected?'connected':'disconnected')}><i/><div><b>{printer.connected?'Printer tersambung':'Printer belum tersambung'}</b><span>{printer.status}</span></div></div><div className="printer-connect-actions"><button className="outline" onClick={connect} disabled={!capability.bridgeAvailable}>Hubungkan</button><button className="outline" onClick={refresh} disabled={!capability.bridgeAvailable}>Periksa</button><button className="outline" onClick={disconnect} disabled={!printer.connected}>Putuskan</button></div><label>Pilih temuan<select value={notice?.id||''} onChange={e=>select(entries.find(x=>x.id===e.target.value)||null)}><option value="">Pilih kendaraan</option>{entries.map(e=><option key={e.id} value={e.id}>{e.no_polisi} — {e.date} {e.time}</option>)}</select></label><label>Bahasa printer<select value={language} onChange={e=>setLanguage(e.target.value)}><option>CPCL</option><option>ZPL</option></select></label><div className="notice-print-btns"><button className="primary" disabled={!notice||!printer.connected} onClick={zebraPrint}><Printer/>Cetak ke Zebra</button><button className="outline" disabled={!notice} onClick={browserPrint}>Cetak Sistem / PDF</button><button className="outline" disabled={!notice} onClick={download}><FileDown/>Unduh {language}</button></div><button className="link-btn" onClick={()=>setShowHelp(!showHelp)}>{showHelp?'Sembunyikan panduan':'Panduan koneksi printer'}</button>{showHelp&&<div className="printer-note"><b>{capability.platform==='ios'?'iPhone: Gunakan Zebra MFi SDK':'Android: Gunakan Zebra Printer SDK'}</b><span>Bluetooth Classic/SPP tidak dijamin dari browser. Hubungkan printer via aplikasi Zebra companion, lalu kembali ke sini untuk cetak.</span><span>Pastikan printer menyala dan sudah dipasangkan di Bluetooth settings perangkat.</span></div>}</div>{notice?<div className="notice-preview-wrap"><ThermalNotice notice={notice}/></div>:<div className="card empty">Pilih temuan untuk melihat preview notice sebelum cetak.</div>}</section>
+ const [bleProgress,setBleProgress]=useState(0);
+ async function connect(){
+  try{
+   if(mode==='ble'){
+    setPrinter({connected:false,status:'Mencari printer Bluetooth...'});
+    const r=await connectWebBluetooth();
+    setPrinter({connected:Boolean(r?.ok),status:r?.name||(r?.ok?'Zebra tersambung':'Koneksi gagal')});
+   }else{
+    const r=await connectZebraBridge();
+    setPrinter({connected:Boolean(r?.ok||r?.connected),status:r?.name||r?.deviceName||(r?.ok?'Zebra tersambung':'Koneksi gagal')});
+   }
+  }catch(e){setPrinter({connected:false,status:e?.message||'Koneksi gagal'})}
+ }
+ async function refresh(){
+  if(mode==='ble'){const r=getWebBluetoothStatus();setPrinter({connected:r.connected,status:r.name||'Tidak tersambung'});return}
+  const r=await getZebraBridgeStatus();setPrinter({connected:Boolean(r?.connected),status:r?.name||r?.deviceName||(r?.connected?'Zebra tersambung':'Tidak tersambung')});
+ }
+ async function disconnect(){
+  if(mode==='ble'){await disconnectWebBluetooth();setPrinter({connected:false,status:'Koneksi diputus'});return}
+  await disconnectZebraBridge();setPrinter({connected:false,status:'Koneksi diputus'});
+ }
+ async function test(){
+  try{
+   const raw=language==='ZPL'?'! 0 200 200 220 1\nCENTER\nTEXT 4 0 0 30 TEST PRINTER\nTEXT 0 2 0 85 KONEKSI BERHASIL\nFORM\nPRINT\n':'! 0 200 200 220 1\nCENTER\nTEXT 4 0 0 30 TEST PRINTER\nTEXT 0 2 0 85 KONEKSI BERHASIL\nFORM\nPRINT\n';
+   if(mode==='ble'){await sendViaWebBluetooth(raw)}else{await testZebraBridge(language)}
+   alert('Test print berhasil dikirim.');
+  }catch(e){alert('Test print gagal: '+(e?.message||e))}
+ }
+ const canConnect=(mode==='ble'&&hasBle)||(mode==='bridge'&&hasBridge);
+ return<section className="notice-layout"><div className="card notice-controls"><div className="card-title"><Printer/>Cetak Notice</div><div className={'printer-status '+(printer.connected?'connected':'disconnected')}><i/><div><b>{printer.connected?'Printer tersambung':'Printer belum tersambung'}</b><span>{printer.status}</span></div></div><div className="printer-mode-select"><label className={'mode '+((mode==='ble')?'active':'')}><input type="radio" name="printermode" value="ble" checked={mode==='ble'} onChange={()=>setMode('ble')}/><span>Web Bluetooth</span><small>{hasBle?'Chrome Android':'Tidak didukung'}</small></label><label className={'mode '+((mode==='bridge')?'active':'')}><input type="radio" name="printermode" value="bridge" checked={mode==='bridge'} onChange={()=>setMode('bridge')}/><span>Native Bridge</span><small>{hasBridge?'Companion app':'Belum terinstall'}</small></label></div><div className="printer-connect-actions"><button className="outline" onClick={connect} disabled={!canConnect||printer.connected}>Hubungkan</button><button className="outline" onClick={refresh} disabled={!printer.connected}>Periksa</button><button className="outline" onClick={disconnect} disabled={!printer.connected}>Putuskan</button><button className="outline" onClick={test} disabled={!printer.connected}>Test Cetak</button></div>{bleProgress>0&&bleProgress<100&&<div className="ble-progress"><div className="ble-bar" style={{width:bleProgress+'%'}}/></div>}<label>Pilih temuan<select value={notice?.id||''} onChange={e=>select(entries.find(x=>x.id===e.target.value)||null)}><option value="">Pilih kendaraan</option>{entries.map(e=><option key={e.id} value={e.id}>{e.no_polisi} — {e.date} {e.time}</option>)}</select></label><label>Bahasa printer<select value={language} onChange={e=>setLanguage(e.target.value)}><option>CPCL</option><option>ZPL</option></select></label><div className="notice-print-btns"><button className="primary" disabled={!notice||!printer.connected} onClick={()=>zebraPrint(mode)}><Printer/>Cetak ke Zebra</button><button className="outline" disabled={!notice} onClick={browserPrint}>Cetak Sistem / PDF</button><button className="outline" disabled={!notice} onClick={download}><FileDown/>Unduh {language}</button></div><button className="link-btn" onClick={()=>setShowHelp(!showHelp)}>{showHelp?'Sembunyikan panduan':'Panduan koneksi printer'}</button>{showHelp&&<div className="printer-note"><b>Web Bluetooth (Chrome Android)</b><span>Pastikan Bluetooth aktif. Klik "Hubungkan" lalu pilih printer Zebra dari daftar. Tidak perlu companion app.</span><b>Native Bridge (Companion App)</b><span>Install Zebra Printer SDK / Link-OS companion app. Printer akan terhubung otomatis melalui bridge.</span><span>Pastikan printer Zebra iMZ320 menyala dan dalam mode Bluetooth.</span></div>}</div>{notice?<div className="notice-preview-wrap"><ThermalNotice notice={notice}/></div>:<div className="card empty">Pilih temuan untuk melihat preview notice sebelum cetak.</div>}</section>
 }
 
 function ArrearsView({session}){

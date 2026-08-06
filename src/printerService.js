@@ -1,6 +1,13 @@
 const clean = (value = '') => String(value).replace(/[\^~]/g, '').trim();
 export const TAX_INFO_URL = 'https://bapenda.riau.go.id/dashboard/layanan/infopajak';
 
+// Zebra BLE Service & Characteristic UUIDs (Nordic UART / Zebra ISSC)
+const ZEBRA_BLE_SERVICE = '49535343-fe7d-4ae5-8fa9-9fafd205e455';
+const ZEBRA_BLE_TX      = '49535343-1e4d-4bd9-ba61-23c647249616';
+const ZEBRA_BLE_RX      = '49535343-8841-43f4-a894-3da7fe7df90c';
+const BLE_CHUNK_SIZE    = 20;
+const BLE_CHUNK_DELAY   = 50;
+
 export const buildNoticeId = (date = new Date()) => {
   const stamp = date.toISOString().replace(/\D/g, '').slice(0, 14);
   const random = Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -90,3 +97,80 @@ export const connectZebraBridge=async()=>window.ZebraPrinterBridge?.connect?pars
 export const getZebraBridgeStatus=async()=>window.ZebraPrinterBridge?.getStatus?parseBridgeResult(await window.ZebraPrinterBridge.getStatus()):{connected:false,status:'bridge-unavailable'};
 export const disconnectZebraBridge=async()=>{if(!window.ZebraPrinterBridge?.disconnect)return {ok:false};await window.ZebraPrinterBridge.disconnect();return {ok:true}};
 export const testZebraBridge=async(language='CPCL')=>{if(!window.ZebraPrinterBridge?.print)return {ok:false};const raw=language==='ZPL'?'^XA^PW600^LL220^CF0,30^FO30,30^FB540,1,0,C^FDTEST PRINTER ZEBRA^FS^FO30,90^FB540,2,5,C^FDTIM PEMBINA SAMSAT PROVINSI RIAU\\&KONEKSI BERHASIL^FS^XZ':'! 0 200 200 220 1\nCENTER\nTEXT 4 0 0 30 TEST PRINTER ZEBRA\nTEXT 0 2 0 85 TIM PEMBINA SAMSAT PROVINSI RIAU\nTEXT 0 2 0 125 KONEKSI BERHASIL\nFORM\nPRINT\n';await window.ZebraPrinterBridge.print(raw,language);return {ok:true}};
+
+/* ========== Web Bluetooth (BLE) for Zebra iMZ320 ========== */
+
+let bleDevice = null;
+let bleCharacteristic = null;
+let bleServer = null;
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+const isWebBluetoothAvailable = () => !!(navigator.bluetooth);
+
+const connectWebBluetooth = async () => {
+  if (!navigator.bluetooth) throw new Error('Web Bluetooth tidak didukung di browser ini. Gunakan Chrome Android.');
+
+  bleDevice = await navigator.bluetooth.requestDevice({
+    filters: [
+      { services: [ZEBRA_BLE_SERVICE] },
+      { namePrefix: 'Zebra' },
+      { namePrefix: 'MZ' },
+      { namePrefix: 'iMZ' },
+    ],
+    optionalServices: [ZEBRA_BLE_SERVICE]
+  });
+
+  bleDevice.addEventListener('gattserverdisconnected', () => {
+    bleCharacteristic = null;
+    bleServer = null;
+  });
+
+  bleServer = await bleDevice.gatt.connect();
+
+  let service;
+  try {
+    service = await bleServer.getPrimaryService(ZEBRA_BLE_SERVICE);
+  } catch {
+    // Try generic UART service as fallback
+    service = await bleServer.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+  }
+
+  bleCharacteristic = await service.getCharacteristic(ZEBRA_BLE_TX);
+
+  return { ok: true, name: bleDevice.name || 'Zebra Printer', transport: 'web-bluetooth' };
+};
+
+const sendViaWebBluetooth = async (data, onProgress) => {
+  if (!bleCharacteristic) throw new Error('Printer belum tersambung via Bluetooth.');
+
+  const bytes = new TextEncoder().encode(data);
+  const totalChunks = Math.ceil(bytes.length / BLE_CHUNK_SIZE);
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * BLE_CHUNK_SIZE;
+    const chunk = bytes.slice(start, start + BLE_CHUNK_SIZE);
+    await bleCharacteristic.writeValueWithoutResponse(chunk);
+    if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100));
+    if (i < totalChunks - 1) await sleep(BLE_CHUNK_DELAY);
+  }
+
+  return { ok: true };
+};
+
+const disconnectWebBluetooth = async () => {
+  if (bleDevice?.gatt?.connected) {
+    bleDevice.gatt.disconnect();
+  }
+  bleCharacteristic = null;
+  bleServer = null;
+  bleDevice = null;
+  return { ok: true };
+};
+
+const getWebBluetoothStatus = () => ({
+  connected: !!(bleDevice?.gatt?.connected),
+  name: bleDevice?.name || null
+});
+
+export { isWebBluetoothAvailable, connectWebBluetooth, sendViaWebBluetooth, disconnectWebBluetooth, getWebBluetoothStatus };
