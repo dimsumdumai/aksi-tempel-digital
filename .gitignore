@@ -11,3 +11,5 @@ dist/
 supabase/.temp/
 *.log
 public/database-gaspoll.xlsx
+.vercel
+.env*
