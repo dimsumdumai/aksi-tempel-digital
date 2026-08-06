@@ -5,12 +5,20 @@ const bodyOf=req=>typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.bod
 
 export default async function handler(req,res){
   res.setHeader('Cache-Control','no-store');
+  const action=clean(req.query.action,80).toLowerCase();
   try{
     const client=db();
     const user=await currentUser(req,client);
     if(!user) return json(res,401,{error:'Sesi tidak valid. Silakan masuk kembali.'});
 
-    // GET: list all users (admin+)
+    // GET /api/users?action=profile - return current user profile
+    if(action==='profile'){
+      if(req.method!=='GET') return json(res,405,{error:'Method not allowed'});
+      const {data}=await client.from('app_users').select('username,name,position,role,email,email_verified,active,created_at').eq('username',user.username).single();
+      return json(res,200,{profile:data||{}});
+    }
+
+    // GET /api/users (no action) - list all users (admin+)
     if(req.method==='GET'){
       if(user.role==='user') return json(res,403,{error:'Akses ditolak.'});
       const {data,error}=await client.from('app_users').select('username,name,position,role,active,created_at').order('created_at',{ascending:false});
@@ -18,7 +26,7 @@ export default async function handler(req,res){
       return json(res,200,{rows:data||[]});
     }
 
-    // POST: create/upsert user (admin+)
+    // POST /api/users (no action) - create/upsert user (admin+)
     if(req.method==='POST'){
       if(user.role!=='super_admin'&&user.role!=='admin') return json(res,403,{error:'Akses ditolak.'});
       const body=bodyOf(req),username=clean(body.username,80).toLowerCase(),name=clean(body.name,100),position=clean(body.position,200),role=clean(body.role,20),password=clean(body.password,200);
@@ -30,7 +38,7 @@ export default async function handler(req,res){
       return json(res,201,{saved:true});
     }
 
-    // DELETE: delete user (super_admin only)
+    // DELETE /api/users (no action) - delete user (super_admin only)
     if(req.method==='DELETE'){
       if(user.role!=='super_admin') return json(res,403,{error:'Hanya super admin yang dapat menghapus akun.'});
       const body=bodyOf(req),target=clean(body.username,80);
