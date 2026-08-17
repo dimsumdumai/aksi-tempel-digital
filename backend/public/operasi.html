@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operasi Gabungan — Aksi Tempel Digital</title>
+<style>
+  :root { color-scheme: light; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f4f6f9;
+    color: #1a1a2e;
+    min-height: 100vh;
+  }
+
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #fff;
+    padding: 20px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  }
+
+  header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  header .subtitle {
+    font-size: 13px;
+    color: #8892b0;
+    margin-top: 2px;
+  }
+
+  .nav-link {
+    color: #8892b0;
+    text-decoration: none;
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    transition: all 0.2s;
+  }
+
+  .nav-link:hover {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+
+  .page-title {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+    border-left: 4px solid;
+  }
+
+  .stat-card.blue { border-color: #0984e3; }
+  .stat-card.green { border-color: #00b894; }
+  .stat-card.yellow { border-color: #fdcb6e; }
+
+  .stat-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    color: #636e72;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+
+  .stat-value {
+    font-size: 28px;
+    font-weight: 700;
+  }
+
+  .form-section {
+    background: #fff;
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+  }
+
+  .form-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .form-group.full-width {
+    grid-column: 1 / -1;
+  }
+
+  .form-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a1a2e;
+  }
+
+  .form-input, .form-select {
+    padding: 12px 14px;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: inherit;
+    transition: all 0.2s;
+    background: #fff;
+  }
+
+  .form-input:focus, .form-select:focus {
+    outline: none;
+    border-color: #0984e3;
+    box-shadow: 0 0 0 3px rgba(9,132,227,0.1);
+  }
+
+  .form-input::placeholder {
+    color: #b2bec3;
+  }
+
+  .nopol-input-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .nopol-prefix {
+    background: #1a1a2e;
+    color: #fff;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+
+  .nopol-separator {
+    font-size: 15px;
+    font-weight: 700;
+    color: #636e72;
+  }
+
+  .btn-primary {
+    background: #0984e3;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 8px;
+  }
+
+  .btn-primary:hover {
+    background: #0769b5;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(9,132,227,0.3);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
+  }
+
+  .btn-secondary {
+    background: #f8f9fa;
+    color: #1a1a2e;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-secondary:hover {
+    background: #e9ecef;
+  }
+
+  .btn-danger {
+    background: #e74c3c;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-danger:hover {
+    background: #c0392b;
+  }
+
+  .toast {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    background: #00b894;
+    color: #fff;
+    padding: 14px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    transform: translateX(120%);
+    transition: transform 0.3s ease;
+    z-index: 100;
+  }
+
+  .toast.show {
+    transform: translateX(0);
+  }
+
+  .toast.error {
+    background: #e74c3c;
+  }
+
+  .table-section {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+  }
+
+  .table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .table-title {
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 12px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 13px;
+  }
+
+  th {
+    font-weight: 600;
+    color: #636e72;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .nopol-cell {
+    font-weight: 700;
+    font-family: 'SF Mono', monospace;
+    letter-spacing: 0.5px;
+    color: #1a1a2e;
+  }
+
+  .badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .badge-new { background: #e7f3ff; color: #004085; }
+  .badge-processed { background: #d4edda; color: #155724; }
+
+  .empty-state {
+    text-align: center;
+    padding: 48px;
+    color: #636e72;
+  }
+
+  .empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+  }
+
+  @media (max-width: 768px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .stats-row { grid-template-columns: 1fr; }
+    .nopol-input-group { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Aksi Tempel Digital</h1>
+    <div class="subtitle">Menu Operasi Gabungan</div>
+  </div>
+  <a href="/dashboard" class="nav-link">← Kembali ke Dashboard</a>
+</header>
+
+<div class="container">
+
+  <div class="page-header">
+    <div class="page-title">Entri Data Operasi</div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card blue">
+      <div class="stat-label">Total Entri Hari Ini</div>
+      <div class="stat-value" id="statToday">0</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">Total Semua Entri</div>
+      <div class="stat-value" id="statTotal">0</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="stat-label">Status</div>
+      <div class="stat-value" style="font-size: 16px; margin-top: 6px;">Siap Operasi</div>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-title">📝 Formulir Entri Data</div>
+    <form id="entryForm">
+      <div class="form-grid">
+
+        <div class="form-group full-width">
+          <label class="form-label">Nomor Polisi (Nopol)</label>
+          <div class="nopol-input-group">
+            <span class="nopol-prefix">BM</span>
+            <span class="nopol-separator">-</span>
+            <input type="text" class="form-input" id="nopolCode" placeholder="1234" maxlength="4" required style="flex: 2; text-transform: uppercase; font-weight: 700; font-size: 16px; letter-spacing: 1px;">
+            <span class="nopol-separator">-</span>
+            <input type="text" class="form-input" id="nopolSuffix" placeholder="AB" maxlength="2" required style="flex: 1; text-transform: uppercase; font-weight: 700; font-size: 16px; letter-spacing: 1px;">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Nama Pemilik</label>
+          <input type="text" class="form-input" id="ownerName" placeholder="Nama lengkap pemilik kendaraan" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Jenis Kendaraan</label>
+          <select class="form-select" id="vehicleType" required>
+            <option value="" disabled selected>Pilih jenis kendaraan</option>
+            <option value="Sepeda Motor">Sepeda Motor</option>
+            <option value="Mobil Penumpang">Mobil Penumpang</option>
+            <option value="Bus">Bus</option>
+            <option value="Truk">Truk</option>
+            <option value="Pickup">Pickup</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">NIK (Nomor Induk Kependudukan)</label>
+          <input type="text" class="form-input" id="nik" placeholder="16 digit NIK" maxlength="16" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">No. HP / WhatsApp</label>
+          <input type="tel" class="form-input" id="phone" placeholder="08xxxxxxxxxx" required>
+        </div>
+
+        <div class="form-group full-width">
+          <label class="form-label">Catatan (opsional)</label>
+          <input type="text" class="form-input" id="notes" placeholder="Keterangan tambahan">
+        </div>
+
+        <div class="form-group full-width" style="flex-direction: row; gap: 12px; align-items: center;">
+          <button type="submit" class="btn-primary" id="submitBtn">
+            ✅ Simpan Entri
+          </button>
+          <button type="button" class="btn-secondary" onclick="resetForm()">
+            🔄 Reset
+          </button>
+          <button type="button" class="btn-secondary" onclick="getLocation()">
+            📍 Ambil Lokasi GPS
+          </button>
+          <span id="locationStatus" style="font-size: 12px; color: #636e72;"></span>
+        </div>
+
+        <input type="hidden" id="latitude" value="0">
+        <input type="hidden" id="longitude" value="0">
+      </div>
+    </form>
+  </div>
+
+  <div class="table-section">
+    <div class="table-header">
+      <div class="table-title">📋 Data Entri Operasi</div>
+      <button class="btn-secondary" onclick="loadEntries()" style="font-size: 12px; padding: 8px 16px;">🔄 Muat Ulang</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>No</th>
+          <th>Nopol</th>
+          <th>Nama Pemilik</th>
+          <th>Jenis Kendaraan</th>
+          <th>NIK</th>
+          <th>No HP</th>
+          <th>Waktu</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="entryTable">
+        <tr><td colspan="8" class="empty-state">
+          <div class="empty-state-icon">📝</div>
+          Belum ada data entri
+        </td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function showToast(message, isError = false) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => { toast.className = 'toast'; }, 3000);
+}
+
+function resetForm() {
+  document.getElementById('entryForm').reset();
+  document.getElementById('latitude').value = '0';
+  document.getElementById('longitude').value = '0';
+  document.getElementById('locationStatus').textContent = '';
+}
+
+function getLocation() {
+  const status = document.getElementById('locationStatus');
+  status.textContent = 'Mengambil lokasi...';
+  status.style.color = '#0984e3';
+
+  if (!navigator.geolocation) {
+    status.textContent = 'GPS tidak didukung';
+    status.style.color = '#e74c3c';
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      document.getElementById('latitude').value = pos.coords.latitude;
+      document.getElementById('longitude').value = pos.coords.longitude;
+      status.textContent = `✅ ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
+      status.style.color = '#00b894';
+    },
+    (err) => {
+      status.textContent = 'Gagal mengambil lokasi';
+      status.style.color = '#e74c3c';
+    }
+  );
+}
+
+document.getElementById('entryForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const data = {
+    nopol_code: document.getElementById('nopolCode').value.trim(),
+    nopol_suffix: document.getElementById('nopolSuffix').value.trim(),
+    owner_name: document.getElementById('ownerName').value.trim(),
+    vehicle_type: document.getElementById('vehicleType').value,
+    nik: document.getElementById('nik').value.trim(),
+    phone: document.getElementById('phone').value.trim(),
+    latitude: parseFloat(document.getElementById('latitude').value),
+    longitude: parseFloat(document.getElementById('longitude').value),
+    notes: document.getElementById('notes').value.trim()
+  };
+
+  try {
+    const res = await fetch('/api/entries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+
+    const result = await res.json();
+
+    if (result.success) {
+      showToast('Data berhasil disimpan!');
+      resetForm();
+      loadEntries();
+    } else {
+      showToast('Gagal: ' + (result.error || 'Terjadi kesalahan'), true);
+    }
+  } catch (err) {
+    showToast('Gagal mengirim data: ' + err.message, true);
+  }
+});
+
+async function loadEntries() {
+  try {
+    const res = await fetch('/api/entries');
+    const entries = await res.json();
+
+    document.getElementById('statTotal').textContent = entries.length;
+
+    const today = new Date().toISOString().split('T')[0];
+    const todayCount = entries.filter(e => e.created_at && e.created_at.startsWith(today)).length;
+    document.getElementById('statToday').textContent = todayCount;
+
+    const tbody = document.getElementById('entryTable');
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><div class="empty-state-icon">📝</div>Belum ada data entri</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = entries.map((e, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td><span class="nopol-cell">BM ${e.nopol_code} ${e.nopol_suffix}</span></td>
+        <td>${e.owner_name}</td>
+        <td>${e.vehicle_type}</td>
+        <td>${e.nik}</td>
+        <td>${e.phone}</td>
+        <td>${e.created_at || '-'}</td>
+        <td><span class="badge badge-new">${e.status || 'baru'}</span></td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    console.error('Gagal memuat data:', err);
+  }
+}
+
+loadEntries();
+</script>
+</body>
+</html>

@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operasi Gabungan v2 — OCR KTP & STNK</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" crossorigin="anonymous"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f0f2f5;
+    --card: #ffffff;
+    --primary: #0d6efd;
+    --primary-hover: #0b5ed7;
+    --success: #198754;
+    --warning: #ffc107;
+    --danger: #dc3545;
+    --text: #212529;
+    --text-muted: #6c757d;
+    --border: #dee2e6;
+    --radius: 10px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  header {
+    background: linear-gradient(135deg, #0d1b2a 0%, #1b263b 100%);
+    color: #fff;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  header h1 { font-size: 20px; font-weight: 700; }
+  header .subtitle { font-size: 12px; color: #8892b0; margin-top: 2px; }
+
+  .nav-link {
+    color: #8892b0;
+    text-decoration: none;
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    transition: all 0.2s;
+  }
+  .nav-link:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  .scan-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .scan-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    border: 2px dashed var(--border);
+    padding: 24px;
+    text-align: center;
+    transition: all 0.25s;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .scan-card:hover { border-color: var(--primary); background: #f8f9ff; }
+  .scan-card.active { border-color: var(--primary); border-style: solid; background: #f0f7ff; }
+  .scan-card.done { border-color: var(--success); border-style: solid; background: #f0fff4; }
+
+  .scan-card-icon {
+    font-size: 48px;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .scan-card-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .scan-card-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .scan-card input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .scan-preview {
+    margin-top: 12px;
+    max-width: 100%;
+    max-height: 180px;
+    border-radius: 8px;
+    object-fit: contain;
+    display: none;
+    border: 1px solid var(--border);
+  }
+
+  .scan-card.done .scan-preview { display: block; }
+
+  .scan-status {
+    margin-top: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    display: none;
+  }
+
+  .scan-card.active .scan-status { display: block; color: var(--primary); }
+  .scan-card.done .scan-status { display: block; color: var(--success); }
+
+  .progress-bar-container {
+    width: 100%;
+    height: 4px;
+    background: #e9ecef;
+    border-radius: 2px;
+    margin-top: 10px;
+    overflow: hidden;
+    display: none;
+  }
+
+  .scan-card.active .progress-bar-container { display: block; }
+
+  .progress-bar {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.3s;
+  }
+
+  .raw-text-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+  }
+
+  .raw-text-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .raw-text-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .raw-text-content {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    background: #f8f9fa;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .form-section {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 28px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+  }
+
+  .form-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group.full { grid-column: 1 / -1; }
+
+  .form-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .form-input, .form-select {
+    padding: 11px 13px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.2s;
+    background: #fff;
+  }
+
+  .form-input:focus, .form-select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(13,110,253,0.08);
+  }
+
+  .form-input.filled {
+    border-color: var(--success);
+    background: #f8fff8;
+  }
+
+  .form-input::placeholder { color: #ced4da; }
+
+  .nopol-group {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .nopol-prefix {
+    background: #0d1b2a;
+    color: #fff;
+    padding: 11px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  .nopol-sep {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+
+  .btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-success:hover { background: #157347; }
+  .btn-outline { background: #fff; color: var(--text); border: 1.5px solid var(--border); }
+  .btn-outline:hover { background: #f8f9fa; }
+
+  .btn-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  .toast {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    background: var(--success);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    transform: translateX(120%);
+    transition: transform 0.3s ease;
+    z-index: 200;
+  }
+
+  .toast.show { transform: translateX(0); }
+  .toast.error { background: var(--danger); }
+
+  .table-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 20px;
+    border: 1px solid var(--border);
+  }
+
+  .table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 13px;
+  }
+
+  th {
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .nopol-cell {
+    font-weight: 700;
+    font-family: 'SF Mono', monospace;
+    color: #0d1b2a;
+  }
+
+  .badge {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .badge-ktp { background: #e7f3ff; color: #004085; }
+  .badge-stnk { background: #fff3cd; color: #856404; }
+  .badge-both { background: #d4edda; color: #155724; }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+  }
+
+  .highlight {
+    animation: highlightFade 1.5s ease;
+  }
+
+  @keyframes highlightFade {
+    0% { background: #ffffcc; }
+    100% { background: transparent; }
+  }
+
+  @media (max-width: 768px) {
+    .scan-layout { grid-template-columns: 1fr; }
+    .form-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Operasi Gabungan v2</h1>
+    <div class="subtitle">OCR KTP & STNK — Auto Fill</div>
+  </div>
+  <a href="/dashboard" class="nav-link">← Dashboard</a>
+</header>
+
+<div class="container">
+
+  <!-- SCAN SECTION -->
+  <div class="scan-layout">
+    <div class="scan-card" id="ktpCard">
+      <input type="file" accept="image/*" id="ktpInput" onchange="handleScan('ktp', this)">
+      <span class="scan-card-icon">🪪</span>
+      <div class="scan-card-title">Scan KTP</div>
+      <div class="scan-card-desc">Foto / upload KTP untuk auto-fill NIK, Nama, Alamat</div>
+      <img class="scan-preview" id="ktpPreview">
+      <div class="scan-status" id="ktpStatus"></div>
+      <div class="progress-bar-container"><div class="progress-bar" id="ktpProgress"></div></div>
+    </div>
+
+    <div class="scan-card" id="stnkCard">
+      <input type="file" accept="image/*" id="stnkInput" onchange="handleScan('stnk', this)">
+      <span class="scan-card-icon">🚗</span>
+      <div class="scan-card-title">Scan STNK</div>
+      <div class="scan-card-desc">Foto / upload STNK untuk auto-fill Nopol, Jenis Kendaraan</div>
+      <img class="scan-preview" id="stnkPreview">
+      <div class="scan-status" id="stnkStatus"></div>
+      <div class="progress-bar-container"><div class="progress-bar" id="stnkProgress"></div></div>
+    </div>
+  </div>
+
+  <!-- RAW OCR TEXT -->
+  <div class="raw-text-card" id="rawTextCard" style="display:none;">
+    <div class="raw-text-header">
+      <div class="raw-text-title">Teks mentah hasil OCR</div>
+      <button class="btn btn-outline" onclick="document.getElementById('rawTextCard').style.display='none'" style="font-size:11px; padding:4px 10px;">Tutup</button>
+    </div>
+    <div class="raw-text-content" id="rawTextContent"></div>
+  </div>
+
+  <!-- FORM SECTION -->
+  <div class="form-section">
+    <div class="form-title">📝 Data Entri</div>
+    <form id="entryForm">
+      <div class="form-grid">
+
+        <div class="form-group full">
+          <label class="form-label">Nomor Polisi</label>
+          <div class="nopol-group">
+            <span class="nopol-prefix">BM</span>
+            <span class="nopol-sep">-</span>
+            <input type="text" class="form-input" id="nopolCode" placeholder="1234" maxlength="4" required style="flex:2; text-transform:uppercase; font-weight:700; font-size:16px; letter-spacing:1px;">
+            <span class="nopol-sep">-</span>
+            <input type="text" class="form-input" id="nopolSuffix" placeholder="AB" maxlength="2" required style="flex:1; text-transform:uppercase; font-weight:700; font-size:16px; letter-spacing:1px;">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Nama Pemilik</label>
+          <input type="text" class="form-input" id="ownerName" placeholder="Nama lengkap" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Jenis Kendaraan</label>
+          <select class="form-select" id="vehicleType" required>
+            <option value="" disabled selected>Pilih jenis</option>
+            <option value="Sepeda Motor">Sepeda Motor</option>
+            <option value="Mobil Penumpang">Mobil Penumpang</option>
+            <option value="Bus">Bus</option>
+            <option value="Truk">Truk</option>
+            <option value="Pickup">Pickup</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">NIK</label>
+          <input type="text" class="form-input" id="nik" placeholder="16 digit NIK" maxlength="16" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">No. HP / WhatsApp</label>
+          <input type="tel" class="form-input" id="phone" placeholder="08xxxxxxxxxx" required>
+        </div>
+
+        <div class="form-group full">
+          <label class="form-label">Alamat (dari KTP)</label>
+          <input type="text" class="form-input" id="address" placeholder="Alamat lengkap">
+        </div>
+
+        <div class="form-group full">
+          <label class="form-label">Catatan (opsional)</label>
+          <input type="text" class="form-input" id="notes" placeholder="Keterangan tambahan">
+        </div>
+
+        <div class="form-group full">
+          <div class="btn-group">
+            <button type="submit" class="btn btn-success">✅ Simpan Entri</button>
+            <button type="button" class="btn btn-outline" onclick="resetForm()">🔄 Reset Semua</button>
+            <button type="button" class="btn btn-outline" onclick="getLocation()">📍 GPS</button>
+            <span id="locationStatus" style="font-size:12px; color:var(--text-muted); display:flex; align-items:center;"></span>
+          </div>
+        </div>
+
+        <input type="hidden" id="latitude" value="0">
+        <input type="hidden" id="longitude" value="0">
+        <input type="hidden" id="scanSource" value="">
+      </div>
+    </form>
+  </div>
+
+  <!-- TABLE -->
+  <div class="table-card">
+    <div class="table-header">
+      <div style="font-size:15px; font-weight:700;">📋 Data Tersimpan</div>
+      <button class="btn btn-outline" onclick="loadEntries()" style="font-size:11px; padding:6px 12px;">🔄 Muat Ulang</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>No</th>
+          <th>Nopol</th>
+          <th>Nama</th>
+          <th>Jenis</th>
+          <th>NIK</th>
+          <th>No HP</th>
+          <th>Source</th>
+          <th>Waktu</th>
+        </tr>
+      </thead>
+      <tbody id="entryTable">
+        <tr><td colspan="8" class="empty-state">Belum ada data</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let worker = null;
+
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => { t.className = 'toast'; }, 3500);
+}
+
+function resetForm() {
+  document.getElementById('entryForm').reset();
+  document.getElementById('latitude').value = '0';
+  document.getElementById('longitude').value = '0';
+  document.getElementById('locationStatus').textContent = '';
+  document.getElementById('scanSource').value = '';
+
+  document.querySelectorAll('.form-input').forEach(el => el.classList.remove('filled'));
+  document.getElementById('ktpCard').className = 'scan-card';
+  document.getElementById('stnkCard').className = 'scan-card';
+  document.getElementById('ktpPreview').style.display = 'none';
+  document.getElementById('stnkPreview').style.display = 'none';
+  document.getElementById('rawTextCard').style.display = 'none';
+  document.getElementById('ktpInput').value = '';
+  document.getElementById('stnkInput').value = '';
+}
+
+function fillField(id, value) {
+  if (!value) return;
+  const el = document.getElementById(id);
+  el.value = value;
+  el.classList.add('filled');
+  el.classList.add('highlight');
+  setTimeout(() => el.classList.remove('highlight'), 1500);
+}
+
+function preprocessImage(imgElement) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  const maxDim = 1500;
+  let w = imgElement.naturalWidth || imgElement.width;
+  let h = imgElement.naturalHeight || imgElement.height;
+  if (w > maxDim || h > maxDim) {
+    const ratio = Math.min(maxDim / w, maxDim / h);
+    w *= ratio;
+    h *= ratio;
+  }
+
+  canvas.width = w;
+  canvas.height = h;
+  ctx.drawImage(imgElement, 0, 0, w, h);
+
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    let gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
+
+    gray = gray < 100 ? 0 : gray > 180 ? 255 : ((gray - 100) / 80) * 255;
+
+    data[i] = gray;
+    data[i+1] = gray;
+    data[i+2] = gray;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return canvas.toDataURL('image/png');
+}
+
+async function handleScan(type, inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+
+  const card = document.getElementById(type + 'Card');
+  const preview = document.getElementById(type + 'Preview');
+  const status = document.getElementById(type + 'Status');
+  const progress = document.getElementById(type + 'Progress');
+
+  card.className = 'scan-card active';
+  status.textContent = 'Memuat gambar...';
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    preview.src = e.target.result;
+    card.classList.add('active');
+
+    status.textContent = 'Preprocessing gambar...';
+    progress.style.width = '10%';
+
+    const img = new Image();
+    img.onload = async () => {
+      const processed = preprocessImage(img);
+
+      status.textContent = 'OCR sedang membaca teks...';
+      progress.style.width = '30%';
+
+      try {
+        const result = await Tesseract.recognize(processed, 'ind+eng', {
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              const pct = Math.round(m.progress * 100);
+              progress.style.width = (30 + pct * 0.7) + '%';
+              status.textContent = `OCR membaca... ${pct}%`;
+            }
+          }
+        });
+
+        progress.style.width = '100%';
+        const text = result.data.text;
+        console.log(`OCR ${type} raw:`, text);
+
+        document.getElementById('rawTextCard').style.display = 'block';
+        document.getElementById('rawTextContent').textContent += `\n--- ${type.toUpperCase()} ---\n${text}\n`;
+
+        if (type === 'ktp') parseKTP(text);
+        else parseSTNK(text);
+
+        card.className = 'scan-card done';
+        status.textContent = '✅ OCR selesai';
+
+        if (!document.getElementById('scanSource').value) {
+          document.getElementById('scanSource').value = type;
+        } else {
+          document.getElementById('scanSource').value += '+' + type;
+        }
+
+      } catch (err) {
+        status.textContent = '❌ Gagal membaca: ' + err.message;
+        card.className = 'scan-card';
+        showToast('OCR gagal: ' + err.message, true);
+      }
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function parseKTP(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const full = text.replace(/\n/g, ' ');
+
+  const nikMatch = full.match(/\b(\d{16})\b/);
+  if (nikMatch) fillField('nik', nikMatch[1]);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (/nama/i.test(line) && !/ayah|ibu|istri|suami/i.test(line)) {
+      const val = line.replace(/.*nama\s*:?\s*/i, '').trim();
+      if (val && val.length > 2) fillField('ownerName', val);
+      else if (i + 1 < lines.length) fillField('ownerName', lines[i+1].trim());
+    }
+
+    if (/alamat/i.test(line)) {
+      const val = line.replace(/.*alamat\s*:?\s*/i, '').trim();
+      if (val && val.length > 3) fillField('address', val);
+      else if (i + 1 < lines.length) fillField('address', lines[i+1].trim());
+    }
+  }
+
+  if (!document.getElementById('nik').value) {
+    const allNums = full.match(/\b\d{16}\b/g);
+    if (allNums) fillField('nik', allNums[0]);
+  }
+}
+
+function parseSTNK(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const full = text.replace(/\n/g, ' ');
+
+  const plateMatch = full.match(/\b([A-Z]{1,2})\s*[\.\-]?\s*(\d{1,4})\s*[\.\-]?\s*([A-Z]{1,3})\b/);
+  if (plateMatch) {
+    fillField('nopolCode', plateMatch[2]);
+    fillField('nopolSuffix', plateMatch[3]);
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (/nama\s*:?\s*$/i.test(line) && i + 1 < lines.length) {
+      fillField('ownerName', lines[i+1].trim());
+    }
+
+    if (/nama/i.test(line) && !/\/|kb\.|cb\./i.test(line) && line.length < 50) {
+      const val = line.replace(/.*nama\s*:?\s*/i, '').trim();
+      if (val && val.length > 2 && !/merek|type|jenis/i.test(val)) {
+        fillField('ownerName', val);
+      }
+    }
+
+    if (/jenis\s*kb|jenis\s*kendaraan|tipe/i.test(line)) {
+      const val = line.replace(/.*(?:jenis\s*kb|jenis\s*kendaraan|tipe)\s*:?\s*/i, '').trim();
+      if (val) {
+        const vlow = val.toLowerCase();
+        if (/motor|sepeda/i.test(vlow)) fillField('vehicleType', 'Sepeda Motor');
+        else if (/bus/i.test(vlow)) fillField('vehicleType', 'Bus');
+        else if (/truk/i.test(vlow)) fillField('vehicleType', 'Truk');
+        else if (/pick\s*up|pickup/i.test(vlow)) fillField('vehicleType', 'Pickup');
+        else if (/mobil|penumpang|sedan|mpv|suv|minibus|city/i.test(vlow)) fillField('vehicleType', 'Mobil Penumpang');
+      }
+    }
+
+    if (/merek/i.test(line)) {
+      const val = line.replace(/.*merek\s*:?\s*/i, '').trim();
+      if (val) {
+        const vlow = val.toLowerCase();
+        if (/motor|sepeda/i.test(vlow)) fillField('vehicleType', 'Sepeda Motor');
+        else if (/bus/i.test(vlow)) fillField('vehicleType', 'Bus');
+        else if (/truk/i.test(vlow)) fillField('vehicleType', 'Truk');
+        else if (/pick/i.test(vlow)) fillField('vehicleType', 'Pickup');
+      }
+    }
+
+    if (/sma\s*hp|sma\.hp|telpon|telp/i.test(line)) {
+      const phoneMatch = line.match(/(\d[\d\-\s]{8,})/);
+      if (phoneMatch) fillField('phone', phoneMatch[1].replace(/[\s\-]/g, ''));
+    }
+  }
+}
+
+function getLocation() {
+  const status = document.getElementById('locationStatus');
+  status.textContent = 'Mengambil lokasi...';
+  status.style.color = 'var(--primary)';
+
+  if (!navigator.geolocation) {
+    status.textContent = 'GPS tidak didukung';
+    status.style.color = 'var(--danger)';
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      document.getElementById('latitude').value = pos.coords.latitude;
+      document.getElementById('longitude').value = pos.coords.longitude;
+      status.textContent = `✅ ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
+      status.style.color = 'var(--success)';
+    },
+    () => {
+      status.textContent = 'Gagal mengambil lokasi';
+      status.style.color = 'var(--danger)';
+    }
+  );
+}
+
+document.getElementById('entryForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const data = {
+    nopol_code: document.getElementById('nopolCode').value.trim(),
+    nopol_suffix: document.getElementById('nopolSuffix').value.trim(),
+    owner_name: document.getElementById('ownerName').value.trim(),
+    vehicle_type: document.getElementById('vehicleType').value,
+    nik: document.getElementById('nik').value.trim(),
+    phone: document.getElementById('phone').value.trim(),
+    latitude: parseFloat(document.getElementById('latitude').value),
+    longitude: parseFloat(document.getElementById('longitude').value),
+    notes: document.getElementById('notes').value.trim()
+  };
+
+  try {
+    const res = await fetch('/api/entries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    if (result.success) {
+      showToast('Data berhasil disimpan!');
+      resetForm();
+      loadEntries();
+    } else {
+      showToast('Gagal: ' + (result.error || 'Terjadi kesalahan'), true);
+    }
+  } catch (err) {
+    showToast('Gagal mengirim: ' + err.message, true);
+  }
+});
+
+async function loadEntries() {
+  try {
+    const res = await fetch('/api/entries');
+    const entries = await res.json();
+    const tbody = document.getElementById('entryTable');
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Belum ada data</td></tr>';
+      return;
+    }
+    tbody.innerHTML = entries.map((e, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td><span class="nopol-cell">BM ${e.nopol_code} ${e.nopol_suffix}</span></td>
+        <td>${e.owner_name}</td>
+        <td>${e.vehicle_type}</td>
+        <td>${e.nik}</td>
+        <td>${e.phone}</td>
+        <td><span class="badge badge-both">${e.scan_source || '-'}</span></td>
+        <td>${e.created_at || '-'}</td>
+      </tr>
+    `).join('');
+  } catch (err) { console.error(err); }
+}
+
+loadEntries();
+</script>
+</body>
+</html>

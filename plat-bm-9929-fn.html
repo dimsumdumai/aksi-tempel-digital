@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plat Nomor BM 9929 FN</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: #2c2c2c;
+    font-family: 'Arial Black', 'Helvetica Neue', Arial, sans-serif;
+  }
+
+  .plate-container {
+    background: #1a1a1a;
+    padding: 12px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+
+  .plate {
+    width: 440px;
+    height: 140px;
+    background: #111111;
+    border: 3px solid #333;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .plate::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.03) 0%, transparent 60%),
+      linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 40%);
+    pointer-events: none;
+  }
+
+  .top-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    width: 100%;
+    gap: 10px;
+  }
+
+  .area-code {
+    color: #ffffff;
+    font-size: 42px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    line-height: 1;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+  }
+
+  .number {
+    color: #ffffff;
+    font-size: 62px;
+    font-weight: 900;
+    letter-spacing: 6px;
+    line-height: 1;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+  }
+
+  .suffix {
+    color: #ffffff;
+    font-size: 36px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    line-height: 1;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+  }
+
+  .divider {
+    width: 85%;
+    height: 1px;
+    background: #444;
+    margin: 4px 0;
+  }
+
+  .bottom-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 80%;
+  }
+
+  .validity {
+    color: #888;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+  }
+
+  .month-year {
+    color: #888;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+  }
+
+  .info-section {
+    margin-top: 30px;
+    background: #1e1e1e;
+    border-radius: 12px;
+    padding: 28px 32px;
+    max-width: 464px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  }
+
+  .info-section h2 {
+    color: #e74c3c;
+    font-size: 18px;
+    margin-bottom: 16px;
+    font-family: Arial, sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 24px;
+  }
+
+  .info-item {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .info-label {
+    color: #666;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+    font-family: Arial, sans-serif;
+  }
+
+  .info-value {
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: Arial, sans-serif;
+  }
+
+  .warning-banner {
+    margin-top: 20px;
+    background: rgba(231, 76, 60, 0.15);
+    border: 1px solid rgba(231, 76, 60, 0.3);
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .warning-icon {
+    font-size: 22px;
+  }
+
+  .warning-text {
+    color: #e74c3c;
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+    line-height: 1.4;
+  }
+
+  .warning-text strong {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 2px;
+  }
+
+  .footer {
+    margin-top: 16px;
+    text-align: center;
+    color: #444;
+    font-size: 11px;
+    font-family: Arial, sans-serif;
+    letter-spacing: 0.5px;
+  }
+</style>
+</head>
+<body>
+
+<div>
+  <div class="plate-container">
+    <div class="plate">
+      <div class="top-row">
+        <span class="area-code">BM</span>
+        <span class="number">9929</span>
+        <span class="suffix">FN</span>
+      </div>
+      <div class="divider"></div>
+      <div class="bottom-row">
+        <span class="validity">08 . 26</span>
+        <span class="month-year">2029</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-section">
+    <h2>DATA KENDARAAN</h2>
+    <div class="info-grid">
+      <div class="info-item">
+        <span class="info-label">Plat Nomor</span>
+        <span class="info-value">BM 9929 FN</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Wilayah</span>
+        <span class="info-value">Bengkalis / Riau</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Masa Berlaku</span>
+        <span class="info-value">08-2026 s/d 08-2029</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Status Pajak</span>
+        <span class="info-value" style="color: #e74c3c;">BELUM LUNAS</span>
+      </div>
+    </div>
+
+    <div class="warning-banner">
+      <span class="warning-icon">&#9888;</span>
+      <div class="warning-text">
+        <strong>Pajak Kendaraan Belum Dibayar</strong>
+        Segera lakukan pembayaran pajak kendaraan untuk menghindari denda.
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">Aksi Tempel Digital &mdash; Sistem Edukasi Pajak Kendaraan Bermotor</div>
+</div>
+
+</body>
+</html>
