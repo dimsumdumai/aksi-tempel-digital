@@ -309,7 +309,7 @@ function getBadge(status) {
 
 async function loadStats() {
   try {
-    const reports = await fetch(API + '/api/entries-report', { headers: AUTH() }).then(r => r.json());
+    const reports = await fetch(API + '/api/entries?report=1', { headers: AUTH() }).then(r => r.json());
     document.getElementById('statTotal').textContent = '-';
     document.getElementById('statReports').textContent = reports.length;
     document.getElementById('statBotLogs').textContent = reports.length;
@@ -353,7 +353,7 @@ async function loadVehicles() {
 
 async function loadLogs() {
   try {
-    const res = await fetch(API + '/api/entries-report', { headers: AUTH() });
+    const res = await fetch(API + '/api/entries?report=1', { headers: AUTH() });
     const logs = await res.json();
     const reportRows = Array.isArray(logs) ? logs : (logs.entries || []);
     document.getElementById('statBotLogs').textContent = reportRows.length;

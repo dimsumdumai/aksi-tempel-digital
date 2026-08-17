@@ -9,14 +9,20 @@ export default async function handler(req,res){
     const user=await currentUser(req,client);
     if(!user) return json(res,401,{error:'Sesi tidak valid.'});
 
-    // GET /api/entries
     if(req.method==='GET'){
+      const isReport=req.query.report==='1';
+      if(isReport){
+        const {data:entries,error:e1}=await client.from('operasi_entries').select('id, nopol_code, nopol_suffix, owner_name, vehicle_type, nik, phone, status, scan_source, created_at, created_by').order('created_at',{ascending:false}).limit(200);
+        if(e1) throw e1;
+        const {data:vehicles,error:e2}=await client.from('operasi_vehicles').select('plate_number, owner_name, tax_status, pkb_pokok, pkb_opsen, swdkllj').order('plate_number');
+        if(e2) throw e2;
+        return json(res,200,{entries:entries||[],vehicles:vehicles||[]});
+      }
       const {data,error}=await client.from('operasi_entries').select('*').order('created_at',{ascending:false}).limit(200);
       if(error) throw error;
       return json(res,200,data||[]);
     }
 
-    // POST /api/entries
     if(req.method==='POST'){
       const b=bodyOf(req);
       const nopol_code=clean(b.nopol_code,10).toUpperCase();

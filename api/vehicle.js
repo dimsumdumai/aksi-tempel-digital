@@ -7,12 +7,14 @@ export default async function handler(req,res){
     const user=await currentUser(req,client);
     if(!user) return json(res,401,{error:'Sesi tidak valid.'});
 
-    const plate=clean(decodeURIComponent(req.query.plate||''),30).toUpperCase();
-    if(!plate) return json(res,400,{error:'Nomor polisi wajib diisi.'});
+    const raw=clean(decodeURIComponent(req.query.plate||''),30).toUpperCase();
+    if(!raw) return json(res,400,{error:'Nomor polisi wajib diisi.'});
 
-    const {data,error}=await client.from('operasi_vehicles').select('*').eq('plate_number',plate).maybeSingle();
+    // Supports both "1658 OH" and "BM 1658 OH"; data source is the existing arrears table.
+    const plate=(raw.startsWith('BM')?raw:'BM '+raw).replace(/\s+/g,' ').trim();
+    const {data,error}=await client.from('arrears').select('*').eq('no_polisi',plate).maybeSingle();
     if(error) throw error;
-    if(!data) return json(res,404,{error:'Data kendaraan tidak ditemukan'});
+    if(!data) return json(res,404,{error:'Data kendaraan tidak ditemukan untuk plat '+plate});
     return json(res,200,data);
   }catch(error){
     console.error('Vehicle lookup error:',error);
