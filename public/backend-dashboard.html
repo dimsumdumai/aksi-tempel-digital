@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aksi Tempel Digital — Dashboard</title>
+<title>Aksi Tempel Digital — Dashboard Backend</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" crossorigin="anonymous"></script>
 <style>
   :root { color-scheme: light; }
@@ -205,8 +205,9 @@
     <div class="subtitle">Dashboard Monitoring Pajak Kendaraan Bermotor</div>
   </div>
   <div style="display: flex; gap: 12px; align-items: center;">
-    <a href="/operasi" style="color: #fff; text-decoration: none; background: rgba(255,255,255,0.15); padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.25)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">📝 Operasi</a>
-    <a href="/operasi-v2" style="color: #fff; text-decoration: none; background: rgba(9,132,227,0.6); padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; transition: all 0.2s;" onmouseover="this.style.background='rgba(9,132,227,0.8)'" onmouseout="this.style.background='rgba(9,132,227,0.6)'">🪪 Operasi OCR</a>
+    <a href="/" style="color: #fff; text-decoration: none; background: rgba(255,255,255,0.15); padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;">← Kembali</a>
+    <a href="/operasi" style="color: #fff; text-decoration: none; background: rgba(255,255,255,0.15); padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;">📝 Operasi</a>
+    <a href="/operasi-v2" style="color: #fff; text-decoration: none; background: rgba(9,132,227,0.6); padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;">🪪 Operasi OCR</a>
     <div class="status-badge">
       <span class="status-dot"></span>
       Bot @dimasjrbot Aktif
@@ -293,6 +294,7 @@
 
 <script>
 const API = '';
+const AUTH = () => ({ 'Authorization': 'Bearer ' + (sessionStorage.getItem('aksi-tempel-api-token') || '') });
 
 function formatRp(n) {
   return 'Rp. ' + Number(n).toLocaleString('id-ID');
@@ -307,7 +309,7 @@ function getBadge(status) {
 
 async function loadStats() {
   try {
-    const reports = await fetch(API + '/api/reports').then(r => r.json());
+    const reports = await fetch(API + '/api/entries-report', { headers: AUTH() }).then(r => r.json());
     document.getElementById('statTotal').textContent = '-';
     document.getElementById('statReports').textContent = reports.length;
     document.getElementById('statBotLogs').textContent = reports.length;
@@ -323,7 +325,7 @@ async function loadVehicles() {
     const vehicles = [];
     const plates = ['BM 1658 OH', 'BM 9929 FN', 'BM 1234 AA', 'BM 5678 CD', 'BM 7890 EF'];
     for (const plate of plates) {
-      const res = await fetch(API + '/api/vehicles/' + encodeURIComponent(plate));
+      const res = await fetch(API + '/api/vehicle?plate=' + encodeURIComponent(plate), { headers: AUTH() });
       if (res.ok) vehicles.push(await res.json());
     }
     document.getElementById('statTotal').textContent = vehicles.length;
@@ -351,29 +353,30 @@ async function loadVehicles() {
 
 async function loadLogs() {
   try {
-    const res = await fetch(API + '/api/reports');
+    const res = await fetch(API + '/api/entries-report', { headers: AUTH() });
     const logs = await res.json();
-    document.getElementById('statBotLogs').textContent = logs.length;
+    const reportRows = Array.isArray(logs) ? logs : (logs.entries || []);
+    document.getElementById('statBotLogs').textContent = reportRows.length;
     const tbody = document.getElementById('logTable');
-    if (!logs.length) {
+    if (!reportRows.length) {
       tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Belum ada log</td></tr>';
       return;
     }
-    tbody.innerHTML = logs.slice(0, 20).map(l => `
+    tbody.innerHTML = reportRows.slice(0, 20).map(l => `
       <tr>
         <td>${l.created_at}</td>
-        <td>${l.officer_name || '-'}</td>
+        <td>${l.officer_name || l.created_by || '-'}</td>
         <td>${l.service_type}</td>
         <td>${l.plate_number}</td>
       </tr>
     `).join('');
 
-    renderCharts(logs);
+    renderCharts(reportRows);
   } catch(e) { console.error(e); }
 }
 
 function renderCharts(logs) {
-  const statusCounts = { aktif: 0, belum_lunas: 0, jatuh_tempo: 0, unknown: 0 };
+    const statusCounts = { aktif: 0, belum_lunas: 0, jatuh_tempo: 0, unknown: 0 };
   logs.forEach(l => { statusCounts[l.status || 'unknown'] = (statusCounts[l.status || 'unknown'] || 0) + 1; });
 
   new Chart(document.getElementById('chartStatus'), {

@@ -8,7 +8,7 @@ import {buildNoticeId,downloadPrinterPayload} from './printerService';
 
 const makeIcon=s=>(p)=><span className={p?.className||'icon'} aria-hidden="true">{s}</span>;
 const Camera=makeIcon('\u{1F4F7}'),ClipboardList=makeIcon('\u{258F}'),BarChart3=makeIcon('\u{25A5}'),Printer=makeIcon('\u{1F5A8}'),History=makeIcon('\u{25F7}'),Database=makeIcon('\u{25A6}'),UserPlus=makeIcon('\u{2695}'),Settings=makeIcon('\u{2699}'),ExternalLink=makeIcon('\u{2197}');
-const BACKEND_URL=import.meta.env.VITE_BACKEND_URL||'http://localhost:3000';
+const BACKEND_URL=import.meta.env.VITE_BACKEND_URL||'';
 const today=()=>new Date().toISOString().slice(0,10);
 const phone62=v=>{let s=String(v||'').replace(/\D/g,'');if(!s||s==='0')return'';if(s.startsWith('0'))s='62'+s.slice(1);else if(!s.startsWith('62'))s='62'+s;return s};
 const waText=r=>'Yth. Bapak/Ibu pemilik kendaraan '+r.no_polisi+'. Berdasarkan kegiatan Aksi Tempel-Tempel Jasa Raharja, kendaraan teridentifikasi memiliki kewajiban yang perlu ditindaklanjuti. Mohon melakukan pengecekan dan pembayaran melalui layanan Samsat resmi. Terima kasih.';
@@ -67,9 +67,9 @@ function App(){
    <nav>{tabs.map(t=><button key={t.id} className={tab===t.id?'active':''} onClick={()=>setTab(t.id)}>{t.icon}{t.label}</button>)}
     <div style={{borderTop:'1px solid rgba(255,255,255,0.1)',margin:'8px 0',paddingTop:'8px'}}>
      <div style={{fontSize:'10px',color:'rgba(255,255,255,0.4)',padding:'0 12px',marginBottom:'6px',textTransform:'uppercase',letterSpacing:'1px'}}>Backend Server</div>
-     <button onClick={()=>window.open(BACKEND_URL+'/dashboard','_blank')}><ExternalLink/>Dashboard Bot</button>
-     <button onClick={()=>window.open(BACKEND_URL+'/operasi','_blank')}><ExternalLink/>Operasi Gabungan</button>
-     <button onClick={()=>window.open(BACKEND_URL+'/operasi-v2','_blank')}><ExternalLink/>Operasi OCR</button>
+     <button onClick={()=>window.open(BACKEND_URL+'/backend-dashboard.html','_blank')}><ExternalLink/>Dashboard Bot</button>
+     <button onClick={()=>window.open(BACKEND_URL+'/operasi.html','_blank')}><ExternalLink/>Operasi Gabungan</button>
+     <button onClick={()=>window.open(BACKEND_URL+'/operasi-v2.html','_blank')}><ExternalLink/>Operasi OCR</button>
     </div>
    </nav>
    <div className="account-box"><b>{session.name}</b><span>{session.role==='super_admin'?'Super Admin':session.role==='admin'?'Administrator':'Petugas Lapangan'}</span><button onClick={logout}>Keluar</button></div>

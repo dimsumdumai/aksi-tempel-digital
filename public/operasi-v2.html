@@ -390,7 +390,7 @@
     <h1>Operasi Gabungan v2</h1>
     <div class="subtitle">OCR KTP & STNK — Auto Fill</div>
   </div>
-  <a href="/dashboard" class="nav-link">← Dashboard</a>
+  <a href="/" class="nav-link">← Dashboard</a>
 </header>
 
 <div class="container">
@@ -788,9 +788,10 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
   };
 
   try {
+    const token = sessionStorage.getItem('aksi-tempel-api-token') || '';
     const res = await fetch('/api/entries', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify(data)
     });
     const result = await res.json();
@@ -808,7 +809,11 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
 
 async function loadEntries() {
   try {
-    const res = await fetch('/api/entries');
+    const token = sessionStorage.getItem('aksi-tempel-api-token') || '';
+    const res = await fetch('/api/entries', {
+      method: 'GET',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
     const entries = await res.json();
     const tbody = document.getElementById('entryTable');
     if (!entries.length) {
