@@ -2,10 +2,16 @@ import {db} from './_lib.js';
 
 const telegramUrl=method=>`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`;
 const esc=value=>String(value??'-').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-const normalizePlate=value=>{
-  let plate=String(value||'').trim().toUpperCase().replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ');
-  if(!plate.startsWith('BM ')) plate='BM '+plate.replace(/^BM\s*/,'');
-  return plate.trim();
+const lookupVehicle=async(client,raw)=>{
+  const key=raw.replace(/[^A-Z0-9]/g,'');
+  if(!key) return null;
+  const num=key.replace(/^BM/,'').replace(/[A-Z]{1,3}$/,'');
+  const suf=key.replace(/^BM\d{1,4}/,'');
+  const formats=['BM '+num+' '+suf,'BM-'+num+'-'+suf,'BM'+num+suf,'BM '+num+'-'+suf,'BM-'+num+' '+suf];
+  const conditions=formats.map(f=>'no_polisi.eq.'+f).join(',');
+  const {data,error}=await client.from('arrears').select('*').or(conditions).limit(1).maybeSingle();
+  if(error) throw error;
+  return data;
 };
 
 async function sendTelegram(chatId,text){
@@ -49,10 +55,9 @@ export default async function handler(req,res){
       await sendTelegram(chatId,'Format belum dikenali. Kirim nomor polisi, contoh: <code>/cek 1658 OH</code>');
       return res.status(200).json({ok:true});
     }
-    const plate=normalizePlate(command||text);
+    const plate=(command||text).replace(/[^A-Z0-9 ]/gi,' ').replace(/\s+/g,' ').trim().toUpperCase();
     const client=db();
-    const {data,error}=await client.from('arrears').select('*').eq('no_polisi',plate).maybeSingle();
-    if(error) throw error;
+    const data=await lookupVehicle(client,plate);
     await client.from('operasi_bot_logs').insert({telegram_chat_id:chatId,telegram_user_name:message.from?.username||message.from?.first_name||'',command:text,message:plate}).catch(()=>{});
     if(!data) await sendTelegram(chatId,`❌ Data kendaraan <b>${esc(plate)}</b> tidak ditemukan.`);
     else await sendTelegram(chatId,arrearsMessage(data));
