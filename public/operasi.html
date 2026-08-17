@@ -381,10 +381,11 @@
           <div class="nopol-input-group">
             <span class="nopol-prefix">BM</span>
             <span class="nopol-separator">-</span>
-            <input type="text" class="form-input" id="nopolCode" placeholder="1234" maxlength="4" required style="flex: 2; text-transform: uppercase; font-weight: 700; font-size: 16px; letter-spacing: 1px;">
+            <input type="text" class="form-input" id="nopolCode" placeholder="1234" maxlength="4" required style="flex: 2; text-transform: uppercase; font-weight: 700; font-size: 16px; letter-spacing: 1px;" onblur="lookupVehicle()">
             <span class="nopol-separator">-</span>
-            <input type="text" class="form-input" id="nopolSuffix" placeholder="AB" maxlength="2" required style="flex: 1; text-transform: uppercase; font-weight: 700; font-size: 16px; letter-spacing: 1px;">
+            <input type="text" class="form-input" id="nopolSuffix" placeholder="AB" maxlength="2" required style="flex: 1; text-transform: uppercase; font-weight: 700; font-size: 16px; letter-spacing: 1px;" onblur="lookupVehicle()">
           </div>
+          <div id="lookupStatus" style="font-size: 12px; color: #636e72; margin-top: 4px; display: none;"></div>
         </div>
 
         <div class="form-group">
@@ -482,6 +483,49 @@ function resetForm() {
   document.getElementById('latitude').value = '0';
   document.getElementById('longitude').value = '0';
   document.getElementById('locationStatus').textContent = '';
+  document.getElementById('lookupStatus').style.display = 'none';
+}
+
+let lookupTimeout = null;
+async function lookupVehicle() {
+  const code = document.getElementById('nopolCode').value.trim();
+  const suffix = document.getElementById('nopolSuffix').value.trim();
+  const status = document.getElementById('lookupStatus');
+
+  if (!code || !suffix) { status.style.display = 'none'; return; }
+
+  const plate = code + ' ' + suffix;
+  status.style.display = 'block';
+  status.style.color = '#0984e3';
+  status.textContent = '🔍 Mencari data kendaraan BM ' + plate + '...';
+
+  try {
+    const token = sessionStorage.getItem('aksi-tempel-api-token') || '';
+    const res = await fetch('/api/vehicle-lookup?plate=' + encodeURIComponent(plate), {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const data = await res.json();
+
+    if (res.ok && data) {
+      if (data.owner_name && !document.getElementById('ownerName').value) {
+        document.getElementById('ownerName').value = data.owner_name;
+      }
+      if (data.vehicle_type) {
+        const sel = document.getElementById('vehicleType');
+        const opts = Array.from(sel.options).map(o => o.value);
+        const match = opts.find(o => o.toLowerCase() === (data.vehicle_type || '').toLowerCase());
+        if (match) sel.value = match;
+      }
+      status.style.color = '#00b894';
+      status.textContent = '✅ Ditemukan: ' + (data.owner_name || '-') + ' — ' + (data.brand || '') + ' ' + (data.type || '') + ' (' + (data.year || '') + ')';
+    } else {
+      status.style.color = '#e74c3c';
+      status.textContent = '❌ Kendaraan BM ' + plate + ' tidak ditemukan di database';
+    }
+  } catch (err) {
+    status.style.color = '#e74c3c';
+    status.textContent = '⚠️ Gagal menghubungi server';
+  }
 }
 
 function getLocation() {

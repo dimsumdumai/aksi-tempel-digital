@@ -438,10 +438,11 @@
           <div class="nopol-group">
             <span class="nopol-prefix">BM</span>
             <span class="nopol-sep">-</span>
-            <input type="text" class="form-input" id="nopolCode" placeholder="1234" maxlength="4" required style="flex:2; text-transform:uppercase; font-weight:700; font-size:16px; letter-spacing:1px;">
+            <input type="text" class="form-input" id="nopolCode" placeholder="1234" maxlength="4" required style="flex:2; text-transform:uppercase; font-weight:700; font-size:16px; letter-spacing:1px;" onblur="lookupVehicle()">
             <span class="nopol-sep">-</span>
-            <input type="text" class="form-input" id="nopolSuffix" placeholder="AB" maxlength="2" required style="flex:1; text-transform:uppercase; font-weight:700; font-size:16px; letter-spacing:1px;">
+            <input type="text" class="form-input" id="nopolSuffix" placeholder="AB" maxlength="2" required style="flex:1; text-transform:uppercase; font-weight:700; font-size:16px; letter-spacing:1px;" onblur="lookupVehicle()">
           </div>
+          <div id="lookupStatus" style="font-size:12px; color:var(--text-muted); margin-top:4px; display:none;"></div>
         </div>
 
         <div class="form-group">
@@ -542,8 +543,9 @@ function resetForm() {
   document.getElementById('longitude').value = '0';
   document.getElementById('locationStatus').textContent = '';
   document.getElementById('scanSource').value = '';
+  document.getElementById('lookupStatus').style.display = 'none';
 
-  document.querySelectorAll('.form-input').forEach(el => el.classList.remove('filled'));
+  document.querySelectorAll('.form-input, .form-select').forEach(el => el.classList.remove('filled'));
   document.getElementById('ktpCard').className = 'scan-card';
   document.getElementById('stnkCard').className = 'scan-card';
   document.getElementById('ktpPreview').style.display = 'none';
@@ -560,6 +562,58 @@ function fillField(id, value) {
   el.classList.add('filled');
   el.classList.add('highlight');
   setTimeout(() => el.classList.remove('highlight'), 1500);
+}
+
+let lookupTimeout = null;
+async function lookupVehicle() {
+  const code = document.getElementById('nopolCode').value.trim();
+  const suffix = document.getElementById('nopolSuffix').value.trim();
+  if (!code || !suffix) return;
+
+  // Don't override if OCR already filled these fields
+  const ownerEl = document.getElementById('ownerName');
+  if (ownerEl.classList.contains('filled')) return;
+
+  const plate = code + ' ' + suffix;
+  const statusEl = document.getElementById('lookupStatus');
+  if (statusEl) {
+    statusEl.style.display = 'block';
+    statusEl.style.color = 'var(--primary)';
+    statusEl.textContent = '🔍 Mencari data BM ' + plate + '...';
+  }
+
+  try {
+    const token = sessionStorage.getItem('aksi-tempel-api-token') || '';
+    const res = await fetch('/api/vehicle-lookup?plate=' + encodeURIComponent(plate), {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const data = await res.json();
+
+    if (res.ok && data) {
+      if (data.owner_name) fillField('ownerName', data.owner_name);
+      if (data.vehicle_type) {
+        const sel = document.getElementById('vehicleType');
+        const opts = Array.from(sel.options).map(o => o.value);
+        const match = opts.find(o => o.toLowerCase() === (data.vehicle_type || '').toLowerCase());
+        if (match) { sel.value = match; sel.classList.add('filled'); }
+      }
+      if (data.address) fillField('address', data.address);
+      if (statusEl) {
+        statusEl.style.color = 'var(--success)';
+        statusEl.textContent = '✅ ' + (data.owner_name || '-') + ' — ' + (data.brand || '') + ' ' + (data.type || '') + ' (' + (data.year || '') + ')';
+      }
+    } else {
+      if (statusEl) {
+        statusEl.style.color = 'var(--danger)';
+        statusEl.textContent = '❌ BM ' + plate + ' tidak ditemukan';
+      }
+    }
+  } catch (err) {
+    if (statusEl) {
+      statusEl.style.color = 'var(--danger)';
+      statusEl.textContent = '⚠️ Gagal menghubungi server';
+    }
+  }
 }
 
 function preprocessImage(imgElement) {
