@@ -12,10 +12,9 @@ export default async function handler(req,res){
     if(!plate.startsWith('BM')){
       plate='BM '+plate;
     }
-    // Normalize spacing: "BM  1658  OH" → "BM 1658 OH"
     plate=plate.replace(/\s+/g,' ').trim();
 
-    const {data,error}=await client.from('operasi_vehicles').select('*').eq('plate_number',plate).maybeSingle();
+    const {data,error}=await client.from('arrears').select('*').eq('no_polisi',plate).maybeSingle();
     if(error) throw error;
     if(!data) return json(res,404,{error:'Data kendaraan tidak ditemukan untuk plat '+plate});
     return json(res,200,data);

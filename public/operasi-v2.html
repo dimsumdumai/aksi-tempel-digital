@@ -590,17 +590,27 @@ async function lookupVehicle() {
     const data = await res.json();
 
     if (res.ok && data) {
-      if (data.owner_name) fillField('ownerName', data.owner_name);
-      if (data.vehicle_type) {
+      if (data.nama_pemilik) fillField('ownerName', data.nama_pemilik);
+      if (data.nomor_hp) fillField('phone', data.nomor_hp);
+      if (data.alamat) fillField('address', data.alamat);
+      if (data.jenis_kendaraan) {
         const sel = document.getElementById('vehicleType');
-        const opts = Array.from(sel.options).map(o => o.value);
-        const match = opts.find(o => o.toLowerCase() === (data.vehicle_type || '').toLowerCase());
+        const vlow = (data.jenis_kendaraan || '').toLowerCase();
+        let match = '';
+        if (/motor|sepeda/i.test(vlow)) match = 'Sepeda Motor';
+        else if (/bus/i.test(vlow)) match = 'Bus';
+        else if (/truk/i.test(vlow)) match = 'Truk';
+        else if (/pick/i.test(vlow)) match = 'Pickup';
+        else if (/mobil|penumpang|sedan|mpv|suv|minibus|city/i.test(vlow)) match = 'Mobil Penumpang';
+        if (!match) {
+          const opts = Array.from(sel.options).map(o => o.value);
+          match = opts.find(o => o.toLowerCase() === vlow) || '';
+        }
         if (match) { sel.value = match; sel.classList.add('filled'); }
       }
-      if (data.address) fillField('address', data.address);
       if (statusEl) {
         statusEl.style.color = 'var(--success)';
-        statusEl.textContent = '✅ ' + (data.owner_name || '-') + ' — ' + (data.brand || '') + ' ' + (data.type || '') + ' (' + (data.year || '') + ')';
+        statusEl.textContent = '✅ ' + (data.nama_pemilik || '-') + ' — ' + (data.jenis_kendaraan || '') + ' | HP: ' + (data.nomor_hp || '-') + ' | Tempo: ' + (data.jatuh_tempo || '-');
       }
     } else {
       if (statusEl) {
