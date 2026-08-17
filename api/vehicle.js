@@ -23,6 +23,9 @@ export default async function handler(req,res){
       'BM'+num+suf,
       'BM '+num+'-'+suf,
       'BM-'+num+' '+suf,
+      num+' '+suf,
+      num+'-'+suf,
+      num+suf,
     ];
     const conditions=formats.map(f=>'no_polisi.eq.'+f).join(',');
 

@@ -7,7 +7,7 @@ const lookupVehicle=async(client,raw)=>{
   if(!key) return null;
   const num=key.replace(/^BM/,'').replace(/[A-Z]{1,3}$/,'');
   const suf=key.replace(/^BM\d{1,4}/,'');
-  const formats=['BM '+num+' '+suf,'BM-'+num+'-'+suf,'BM'+num+suf,'BM '+num+'-'+suf,'BM-'+num+' '+suf];
+  const formats=['BM '+num+' '+suf,'BM-'+num+'-'+suf,'BM'+num+suf,'BM '+num+'-'+suf,'BM-'+num+' '+suf,num+' '+suf,num+'-'+suf,num+suf];
   const conditions=formats.map(f=>'no_polisi.eq.'+f).join(',');
   const {data,error}=await client.from('arrears').select('*').or(conditions).limit(1).maybeSingle();
   if(error) throw error;
